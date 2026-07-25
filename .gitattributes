@@ -19,3 +19,11 @@ third_party/acados/*/t_renderer filter=lfs diff=lfs merge=lfs -text
 third_party/qt5/larch64/bin/lrelease filter=lfs diff=lfs merge=lfs -text
 third_party/qt5/larch64/bin/lupdate filter=lfs diff=lfs merge=lfs -text
 third_party/catch2/include/catch2/catch.hpp filter=lfs diff=lfs merge=lfs -text
+
+# Override: commit these files directly as binary (LFS not available for fork)
+third_party/libyuv/Darwin/lib/libyuv.a -filter -diff -merge -text
+third_party/libyuv/larch64/lib/libyuv.a -filter -diff -merge -text
+third_party/libyuv/x86_64/lib/libyuv.a -filter -diff -merge -text
+third_party/raylib/Darwin/libraylib.a -filter -diff -merge -text
+third_party/raylib/larch64/libraylib.a -filter -diff -merge -text
+third_party/raylib/x86_64/libraylib.a -filter -diff -merge -text
