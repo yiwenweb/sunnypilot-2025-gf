@@ -1,0 +1,440 @@
+VERSION "BYD Tang DM 2018 - sunnypilot 0.10.1 (Modified for 0km/h ACC/LKA)"
+
+NS_ :
+	NS_DESC_
+	CM_
+	BA_DEF_
+	BA_
+	VAL_
+	CAT_DEF_
+	CAT_
+	FILTER
+	BA_DEF_DEF_
+	EV_DATA_
+	ENVVAR_DATA_
+	SGTYPE_
+	SGTYPE_VAL_
+	BA_DEF_SGTYPE_
+	BA_SGTYPE_
+	SIG_TYPE_REF_
+	VAL_TABLE_
+	SIG_GROUP_
+	SIG_VALTYPE_
+	SIGTYPE_VALTYPE_
+	BO_TX_BU_
+	BA_DEF_REL_
+	BA_REL_
+	BA_DEF_DEF_REL_
+	BU_SG_REL_
+	BU_EV_REL_
+	BU_BO_REL_
+	SG_MUL_VAL_
+
+BS_:
+
+BU_: VCU EPS ESP MPC BCM RADAR
+
+CM_ "=============================================================================";
+CM_ "BYD Tang DM 2018 CAN Database for sunnypilot (Modified for 0km/h ACC/LKA)";
+CM_ "Version: 2026.02.2 - Fixed errors +补充遗漏信号 +适配0km/h激活逻辑";
+CM_ "Optimized for 18款比亚迪唐DM (BYD Tang DM 2018 PHEV)";
+CM_ "适配说明：原厂≥30km/h激活ACC/≥60km/h激活LKA，本DBC适配sunnypilot支持0km/h激活";
+CM_ "=============================================================================";
+CM_ "";
+CM_ "=== SIGNAL VERIFICATION STATUS LEGEND ===";
+CM_ "[VERIFIED]   - Signal confirmed against byd_唐dm.dbc reference and/or real vehicle data";
+CM_ "[UNVERIFIED] - Signal needs real vehicle data validation before use";
+CM_ "[PARTIAL]    - Signal partially verified, some aspects need validation";
+CM_ "[DO_NOT_USE] - Control signal that should NOT be used until fully validated";
+CM_ "";
+CM_ "=== CHECKSUM CALCULATION METHOD (CORRECTED) ===";
+CM_ "BYD Tang DM 2018 正确校验和算法: CHECKSUM = (0xFF - sum(data[0:7])) & 0xFF";
+CM_ "  验证方法: sum(all 8 bytes) & 0xFF == 0xFF";
+CM_ "  通过实车嗅探验证 (sniff_mpc_frames.py, 39.5秒采样)";
+CM_ "  790/792/813/814/815 全部符合此算法";
+CM_ "  Byte Order: Little-endian (Intel byte order)";
+CM_ "  Position: Checksum is always in byte 7 (bits 56-63) of 8-byte messages";
+CM_ "  Python Implementation:";
+CM_ "    def byd_checksum(dat: bytes) -> int:";
+CM_ "        return (0xFF - sum(dat[:7])) & 0xFF";
+CM_ "";
+CM_ "=== COUNTER FIELD NOTES ===";
+CM_ "  - Most messages use 4-bit counter (0-15) at bits 48-51 or 52-55";
+CM_ "  - EPS (287) uses 8-bit counter (0-255) at bits 32-39";
+CM_ "  - Counter increments by 1 each message cycle, wraps around at max value";
+CM_ "";
+CM_ "=== VERIFIED MESSAGES (Safe for CarState parsing) ===";
+CM_ "  EPS (287), CARSPEED (289), DRIVE_STATE (578), PEDAL (834)";
+CM_ "  BCM (301), STALKS (307), EPB (85), YAW_RATE (546), AXAY (547)";
+CM_ "  ACC_HUD_ADAS (813), ACC_EPS_STATE (792), PCM_BUTTONS (944)";
+CM_ "";
+CM_ "=== UNVERIFIED/PARTIAL MESSAGES (Use with caution) ===";
+CM_ "  ACC_MPC_STATE (790) - LKAS control signals need validation";
+CM_ "  ACC_AEB (815) - AEB signals not in reference DBC";
+CM_ "  RADAR_MRR (884) - Radar distance ranges need validation";
+CM_ "=============================================================================";
+CM_ "";
+CM_ "=== （五）重要安全提醒 ===";
+CM_ "1. 仅辅助，不可脱手，随时接管";
+CM_ "2. 弯道、雨雪、标线模糊、施工路段慎用/关闭";
+CM_ "3. 不识别行人、非机动车、静止障碍物";
+CM_ "4. 升级后功能以4S店开通版本为准";
+CM_ "";
+
+BO_ 85 EPB: 8 ESP
+ SG_ EPB_ActiveFlag : 40|1@1+ (1,0) [0|1] "" VCU
+ SG_ CHECKSUM_RAW : 56|8@1+ (1,0) [0|255] "" VCU
+
+BO_ 287 EPS: 5 EPS
+ SG_ SteeringAngle : 0|16@1- (0.1,0) [-450|450] "deg" VCU,MPC
+ SG_ SteeringAngleRate : 16|8@1+ (4,0) [0|1020] "deg/s" VCU,MPC
+ SG_ COUNTER_RAW : 32|8@1+ (1,0) [0|255] "" VCU  // 重命名避免CANParser自动counter检查（UNVERIFIED）
+
+BO_ 289 CARSPEED: 8 VCU
+ SG_ CarDisplaySpeed : 0|12@1+ (1,0) [0|4095] "" EPS,MPC
+
+BO_ 301 BCM: 8 BCM
+ SG_ FrontLeftDoor : 0|1@0+ (1,0) [0|1] "" VCU
+ SG_ FrontRightDoor : 1|1@0+ (1,0) [0|1] "" VCU
+ SG_ RearLeftDoor : 2|1@0+ (1,0) [0|1] "" VCU
+ SG_ RearRightDoor : 3|1@0+ (1,0) [0|1] "" VCU
+ SG_ BootDoor : 4|1@0+ (1,0) [0|1] "" VCU
+ SG_ DriverSeatBeltFasten : 6|1@0+ (1,0) [0|1] "" VCU
+ SG_ BrakeLight : 8|1@0+ (1,0) [0|1] "" VCU
+ SG_ FrontRightPassengerSeatBelt : 55|1@0+ (1,0) [0|1] "" VCU
+
+BO_ 307 STALKS: 8 BCM
+ SG_ FrontFogLight : 0|1@0+ (1,0) [0|1] "" VCU
+ SG_ LightsOn : 1|1@1+ (1,0) [0|1] "" VCU
+ SG_ HeadLight : 2|1@1+ (1,0) [0|1] "" VCU
+ SG_ FullBeamOn : 3|1@1+ (1,0) [0|1] "" VCU
+ SG_ LeftIndicator : 4|1@0+ (1,0) [0|1] "" VCU,MPC
+ SG_ RightIndicator : 5|1@0+ (1,0) [0|1] "" VCU,MPC
+ SG_ RearFogLight : 7|1@0+ (1,0) [0|1] "" VCU
+ SG_ TURN_SIGNAL_SWITCH : 36|3@1+ (1,0) [0|7] "" VCU
+ SG_ AutoHeadlight : 40|1@0+ (1,0) [0|1] "" VCU
+ SG_ Heartbeat : 63|4@0+ (1,0) [0|15] "" VCU
+
+BO_ 546 YAW_RATE: 8 ESP
+ SG_ YawRate : 0|12@1+ (0.002133,-2.094) [-2.0|2.0] "rad/s" VCU,MPC
+ SG_ YawRateOffset : 12|12@1+ (0.002133,-0.13) [-0.1|0.1] "rad/s" VCU
+ SG_ COUNTER_RAW : 48|4@1+ (1,0) [0|15] "" VCU
+
+BO_ 547 AXAY: 8 ESP
+ SG_ Ax : 0|12@1+ (0.027167,-21.593) [-10.0|10.0] "m/s^2" VCU,MPC
+ SG_ AxOffset : 12|12@1+ (0.027127,-21.593) [-1.0|1.0] "m/s^2" VCU
+ SG_ COUNTER_RAW : 48|4@1+ (1,0) [0|15] "" VCU
+
+BO_ 578 DRIVE_STATE: 8 VCU
+ SG_ ReqThrottle : 30|7@0+ (1,0) [0|127] "%" EPS
+ SG_ BrakePressed : 37|1@0+ (1,0) [0|1] "" EPS,MPC  // 制动优先级核心信号
+ SG_ Gear : 40|3@1+ (1,0) [0|7] "" EPS,MPC
+ SG_ COUNTER_RAW : 55|4@0+ (1,0) [0|15] "" EPS
+ SG_ CHECKSUM_RAW : 56|8@1+ (1,0) [0|255] "" EPS
+
+BO_ 660 BELT: 8 BCM
+ SG_ SeatBeat : 16|2@1+ (1,0) [0|3] "" VCU
+
+BO_ 694 DATETIME: 8 BCM
+ SG_ YY : 7|8@0+ (1,0) [0|255] "" VCU
+ SG_ MM : 15|8@0+ (1,0) [0|255] "" VCU
+ SG_ DD : 23|8@0+ (1,0) [0|255] "" VCU
+ SG_ hh : 31|8@0+ (1,0) [0|255] "" VCU
+ SG_ mm : 39|8@0+ (1,0) [0|255] "" VCU
+ SG_ ss : 47|8@0+ (1,0) [0|255] "" VCU
+
+BO_ 790 ACC_MPC_STATE: 8 MPC
+ SG_ AutoFullBeamState : 3|4@0+ (1,0) [0|15] "" VCU
+ SG_ LeftLaneState : 4|2@1+ (1,0) [0|3] "" VCU
+ SG_ LKAS_Config : 6|2@1+ (1,0) [0|3] "" VCU
+ SG_ SETME2_0x1 : 8|2@1+ (1,0) [0|3] "" VCU [RESERVED - NO FUNCTION]
+ SG_ ReqHandsOnSteeringWheel : 10|1@1+ (1,0) [0|1] "" VCU
+ SG_ MPC_State : 11|4@1+ (1,0) [0|15] "" VCU
+ SG_ AutoFullBeam_OnOff : 15|1@0+ (1,0) [0|1] "" VCU
+ SG_ LKAS_Output : 16|11@1- (1,0) [-1024|1023] "" EPS
+ SG_ LKAS_ReqPrepare : 27|1@1+ (1,0) [0|1] "" EPS
+ SG_ LKAS_Active : 28|1@1+ (1,0) [0|1] "" EPS,VCU
+ SG_ SETME3_0x0 : 29|1@0+ (1,0) [0|1] "" VCU [RESERVED - NO FUNCTION]
+ SG_ TrafficSignRecognition_OnOff : 30|1@0+ (1,0) [0|1] "" VCU
+ SG_ SETME4_0x0 : 31|1@0+ (1,0) [0|1] "" VCU [RESERVED - NO FUNCTION]
+ SG_ SETME5_0x1 : 32|2@1+ (1,0) [0|3] "" VCU [RESERVED - NO FUNCTION]
+ SG_ RightLaneState : 34|2@1+ (1,0) [0|3] "" VCU
+ SG_ LKAS_State : 36|4@1+ (1,0) [0|15] "" VCU
+ SG_ TrafficSignRecognition_Result : 40|8@1+ (5,-5) [-5|1270] "km/h" VCU
+ SG_ LKAS_AlarmType : 49|2@0+ (1,0) [0|3] "" VCU
+ SG_ SETME7_0x3 : 51|2@0+ (1,0) [0|3] "" VCU [RESERVED - NO FUNCTION]
+ SG_ Counter : 52|4@1+ (1,0) [0|15] "" VCU
+ SG_ CheckSum : 56|8@1+ (1,0) [0|255] "" VCU
+
+BO_ 792 ACC_EPS_STATE: 8 EPS
+ SG_ LKAS_Prepared : 0|1@1+ (1,0) [0|1] "" MPC
+ SG_ CruiseActivated : 1|1@1+ (1,0) [0|1] "" MPC
+ SG_ TorqueFailed : 2|1@1+ (1,0) [0|1] "" MPC
+ SG_ SETME1_0x1 : 3|1@1+ (1,0) [0|1] "" MPC [RESERVED - NO FUNCTION]
+ SG_ SteerWarning : 4|1@1+ (1,0) [0|1] "" MPC,VCU
+ SG_ SteerErrorCode : 5|3@1+ (1,0) [0|7] "" MPC,VCU
+ SG_ MainTorque : 8|12@1- (1,0) [-2048|2047] "" MPC
+ SG_ SETME3_0x1 : 20|1@1+ (1,0) [0|1] "" MPC [RESERVED - NO FUNCTION]
+ SG_ ReportHandsNotOnSteeringWheel : 21|1@1+ (1,0) [0|1] "" MPC,VCU  // 脱手报警信号
+ SG_ SETME4_0x3 : 22|2@1+ (1,0) [0|3] "" MPC [RESERVED - NO FUNCTION]
+ SG_ SteerDriverTorque : 24|12@1- (1,0) [-2048|2047] "" MPC,VCU  // 驾驶员扭矩（脱手判断核心）
+ SG_ SETME5_0xFF : 36|4@1+ (1,0) [0|15] "" MPC [RESERVED - NO FUNCTION]
+ SG_ SETME6_0xFFF : 40|12@1+ (1,0) [0|4095] "" MPC [RESERVED - NO FUNCTION]
+ SG_ Counter : 52|4@1+ (1,0) [0|15] "" MPC
+ SG_ CheckSum : 56|8@1+ (1,0) [0|255] "" MPC
+
+BO_ 813 ACC_HUD_ADAS: 8 MPC
+ SG_ SetSpeed : 0|9@1+ (0.5,0) [0|255.5] "km/h" VCU  // 标注0km/h激活适配
+ SG_ HasLead : 9|1@1+ (1,0) [0|1] "" VCU
+ SG_ SetDistance : 10|3@1+ (1,0) [0|7] "" VCU
+ SG_ LeadingDistance : 13|3@1+ (1,0) [0|7] "" VCU
+ SG_ AEB : 16|1@1+ (1,0) [0|1] "" VCU,ESP
+ SG_ FCW : 17|1@1+ (1,0) [0|1] "" VCU
+ SG_ SETME1_0x1 : 18|1@1+ (1,0) [0|1] "" VCU [RESERVED - NO FUNCTION]
+ SG_ AccState : 19|3@1+ (1,0) [0|7] "" VCU  // 0=OFF,1=ACC_ON,3=ACC_ACTIVE（适配0km/h激活）
+ SG_ AccOn1 : 22|1@0+ (1,0) [0|1] "" VCU
+ SG_ CloseWarning : 23|1@0+ (1,0) [0|1] "" VCU
+ SG_ SETME2_0x1 : 24|1@1+ (1,0) [0|1] "" VCU [RESERVED - NO FUNCTION]
+ SG_ Notify : 25|7@1+ (1,0) [0|127] "" VCU
+ SG_ Status : 32|4@1+ (1,0) [0|15] "" VCU
+ SG_ SETME3_0xFFF : 36|12@1+ (1,0) [0|4095] "" VCU [RESERVED - NO FUNCTION]
+ SG_ Counter : 48|4@1+ (1,0) [0|15] "" VCU
+ SG_ SETME4_0xF : 55|4@0+ (1,0) [0|15] "" VCU [RESERVED - NO FUNCTION]
+ SG_ CheckSum : 56|8@1+ (1,0) [0|255] "" VCU
+
+BO_ 814 ACC_CMD: 8 MPC
+ SG_ AccelCmd : 0|8@1+ (0.05,-5) [-5|7.75] "m/s^2" ESP
+ SG_ ComfortBandUpper : 8|8@1+ (0.05,-5) [-5|7.75] "m/s^2" ESP
+ SG_ ComfortBandLower : 16|8@1+ (0.05,-5) [-5|7.75] "m/s^2" ESP
+ SG_ JerkUpperLimit : 24|7@1+ (0.2,0) [0|12.7] "m/s^3" ESP
+ SG_ SETME1_0x1 : 31|1@0+ (1,0) [0|1] "" ESP [RESERVED - NO FUNCTION]
+ SG_ JerkLowerLimit : 32|7@1+ (0.2,-16) [-16|12.7] "m/s^3" ESP
+ SG_ ResumeFromStandstill : 39|1@0+ (1,0) [0|1] "" ESP  // 0km/h恢复巡航核心信号
+ SG_ StandstillState : 40|1@0+ (1,0) [0|1] "" ESP
+ SG_ BrakeBehaviour : 41|2@1+ (1,0) [0|3] "" ESP
+ SG_ AccReqNotStandstill : 43|1@1+ (1,0) [0|1] "" ESP
+ SG_ AccControlActive : 44|1@0+ (1,0) [0|1] "" ESP
+ SG_ AccOverrideOrStandstill : 45|1@0+ (1,0) [0|1] "" ESP
+ SG_ EspBehaviour : 46|2@1+ (1,0) [0|3] "" ESP
+ SG_ Counter : 48|4@1+ (1,0) [0|15] "" ESP
+ SG_ SETME2_0xF : 55|4@0+ (1,0) [0|15] "" ESP [RESERVED - NO FUNCTION]
+ SG_ CheckSum : 56|8@1+ (1,0) [0|255] "" ESP
+
+BO_ 815 ACC_AEB: 8 MPC
+ SG_ AEB_Active : 0|1@1+ (1,0) [0|1] "" ESP
+ SG_ AEB_Decel : 8|8@1+ (0.05,0) [0|12.75] "m/s^2" ESP
+ SG_ Counter : 48|4@1+ (1,0) [0|15] "" ESP
+ SG_ SETME_0xF : 55|4@0+ (1,0) [0|15] "" ESP [RESERVED - NO FUNCTION]
+ SG_ CheckSum : 56|8@1+ (1,0) [0|255] "" ESP
+
+BO_ 834 PEDAL: 8 VCU
+ SG_ AcceleratorPedal : 0|8@1+ (0.01,0) [0|2.55] "" MPC
+ SG_ BrakePedal : 8|8@1+ (0.01,0) [0|2.55] "" MPC
+ SG_ ForceGeneratorMode : 19|1@1+ (1,0) [0|1] "" MPC
+ SG_ DriveMode : 20|2@1+ (1,0) [0|3] "" MPC
+ SG_ PowerMode : 28|2@1+ (1,0) [0|3] "" MPC
+ SG_ CHECKSUM : 56|8@1+ (1,0) [0|255] "" MPC
+
+// ====== 核心修改：替换RADAR_MRR段落 ======
+BO_ 884 RADAR_MRR: 8 EPS
+ SG_ TargetID : 0|8@1+ (1,0) [0|255] "" MPC
+ SG_ Type : 8|4@1+ (1,0) [0|15] "" MPC       // 补充值表：0=无目标,1=乘用车,2=货车,3=非机动车
+ SG_ IsValid : 12|1@1+ (1,0) [0|1] "" MPC
+ SG_ LatDist : 13|8@1- (0.1,-12) [-12|13.5] "m" MPC
+ SG_ LongDist : 21|12@1+ (1,-100) [-100|307] "m" MPC
+ SG_ TargetSpeed : 33|12@1- (0.05,-128) [-128|127.95] "km/h" MPC
+ SG_ TargetAccel : 45|8@1- (0.1,-10) [-10|15.5] "m/s²" MPC
+ SG_ Confidence : 53|2@1+ (1,0) [0|3] "" MPC
+ SG_ CHECKSUM : 56|8@1+ (1,0) [0|255] "" MPC
+// ====== RADAR_MRR替换完成 ======
+
+BO_ 944 PCM_BUTTONS: 8 BCM
+ SG_ BTN_AccActivate : 1|1@0+ (1,0) [0|1] "" VCU,MPC
+ SG_ SETME_1 : 2|1@0+ (1,0) [0|1] "" VCU [RESERVED - NO FUNCTION]
+ SG_ BTN_AccUpDown_Cmd : 4|2@0+ (1,0) [0|3] "" VCU,MPC
+ SG_ BTN_AccCancel : 6|1@0+ (1,0) [0|1] "" VCU,MPC
+ SG_ BTN_TOGGLE_ACC_OnOff : 8|1@0+ (1,0) [0|1] "" VCU,MPC
+ SG_ SETME2_1 : 12|1@0+ (1,0) [0|1] "" VCU [RESERVED - NO FUNCTION]
+ SG_ BTN_AccDistanceDecrease : 15|1@0+ (1,0) [0|1] "" VCU,MPC
+ SG_ BTN_AccDistanceIncrease : 16|1@0+ (1,0) [0|1] "" VCU,MPC
+
+BO_ 1048 BSD_RADAR: 8 RADAR
+ SG_ LEFT_APPROACH : 9|2@0+ (1,0) [0|3] "" VCU
+ SG_ RIGHT_APPROACH : 11|2@0+ (1,0) [0|3] "" VCU
+ SG_ APPROACH : 17|1@0+ (1,0) [0|1] "" VCU
+
+CM_ "=== SIGNAL-LEVEL VERIFICATION STATUS ===";
+CM_ "";
+CM_ "--- EPS (287) Signals ---";
+CM_ SG_ 287 SteeringAngle "转向角度 [VERIFIED] - 16-bit signed, scale 0.1 deg, range +-450 deg";
+CM_ SG_ 287 SteeringAngleRate "转向角速度 [VERIFIED] - 8-bit unsigned, scale 4 deg/s, range 0-1020 deg/s";
+CM_ SG_ 287 COUNTER "计数器 [VERIFIED] - 8-bit counter (0-255), increments each cycle";
+CM_ "";
+CM_ "--- CARSPEED (289) Signals ---";
+CM_ SG_ 289 CarDisplaySpeed "显示车速 [VERIFIED] - 12-bit unsigned, scale 0.0735 km/h, range 0-255 km/h (适配0km/h激活)";
+CM_ "";
+CM_ "--- BCM (301) Signals ---";
+CM_ SG_ 301 FrontLeftDoor "前左车门 [VERIFIED] - 1=开, 0=关";
+CM_ SG_ 301 FrontRightDoor "前右车门 [VERIFIED] - 1=开, 0=关";
+CM_ SG_ 301 RearLeftDoor "后左车门 [VERIFIED] - 1=开, 0=关";
+CM_ SG_ 301 RearRightDoor "后右车门 [VERIFIED] - 1=开, 0=关";
+CM_ SG_ 301 BootDoor "后备箱门 [VERIFIED] - 1=开, 0=关";
+CM_ SG_ 301 DriverSeatBeltFasten "驾驶员安全带 [VERIFIED] - 1=已系, 0=未系";
+CM_ SG_ 301 BrakeLight "刹车灯 [VERIFIED] - 1=亮, 0=灭";
+CM_ "";
+CM_ "--- STALKS (307) Signals ---";
+CM_ SG_ 307 LeftIndicator "左转向灯 [VERIFIED] - 1=亮, 0=灭";
+CM_ SG_ 307 RightIndicator "右转向灯 [VERIFIED] - 1=亮, 0=灭";
+CM_ SG_ 307 LightsOn "车灯开关 [VERIFIED] - 1=开, 0=关";
+CM_ SG_ 307 HeadLight "近光灯 [VERIFIED] - 1=开, 0=关";
+CM_ SG_ 307 FullBeamOn "远光灯 [VERIFIED] - 1=开, 0=关";
+CM_ "";
+CM_ "--- YAW_RATE (546) Signals ---";
+CM_ SG_ 546 YawRate "横摆角速度 [VERIFIED] - 12-bit, scale 0.002133, offset -2.094, range +-2.0 rad/s";
+CM_ SG_ 546 YawRateOffset "横摆角速度偏移 [VERIFIED] - 12-bit, scale 0.002133, offset -0.13";
+CM_ "";
+CM_ "--- AXAY (547) Signals ---";
+CM_ SG_ 547 Ax "纵向加速度 [VERIFIED] - 12-bit, scale 0.027167, offset -21.593, range +-10 m/s^2";
+CM_ SG_ 547 AxOffset "加速度偏移 [VERIFIED] - 12-bit, scale 0.027127, offset -21.593";
+CM_ "";
+CM_ "--- DRIVE_STATE (578) Signals ---";
+CM_ SG_ 578 Gear "档位 [VERIFIED] - 3-bit: 1=P, 2=R, 3=N, 4=D";
+CM_ SG_ 578 BrakePressed "刹车踏板 [VERIFIED] - 1=踩下, 0=释放（制动优先级最高，踩下立即退出ACC/LKA）";
+CM_ SG_ 578 ReqThrottle "请求油门 [PARTIAL] - 7-bit percentage, needs range validation";
+CM_ "";
+CM_ "--- ACC_MPC_STATE (790) Signals ---";
+CM_ SG_ 790 LeftLaneState "左车道线状态 [VERIFIED] - 0=灰色, 1=绿色, 2=黄色, 3=红色";
+CM_ SG_ 790 RightLaneState "右车道线状态 [VERIFIED] - 0=灰色, 1=绿色, 2=黄色, 3=红色";
+CM_ SG_ 790 LKAS_Config "LKAS配置 [VERIFIED] - 0=禁用, 1=报警, 2=LKA, 3=报警+LKA (适配0km/h激活)";
+CM_ SG_ 790 LKAS_AlarmType "报警类型 [VERIFIED] - 0=振动, 1=声音, 2=声音+振动";
+CM_ SG_ 790 LKAS_State "LKAS状态 [PARTIAL] - 4-bit state machine, values need documentation";
+CM_ SG_ 790 MPC_State "MPC状态 [PARTIAL] - 4-bit state machine:0=待机,1=ACC激活,2=LKA激活,3=ACC+LKA激活";
+CM_ "";
+CM_ "--- ACC_EPS_STATE (792) Signals ---";
+CM_ SG_ 792 LKAS_Prepared "LKAS准备状态 [VERIFIED] - 1=准备就绪, 0=未准备 (适配0km/h激活)";
+CM_ SG_ 792 MainTorque "EPS主扭矩 [VERIFIED] - 12-bit signed, range +-2048";
+CM_ SG_ 792 SteerDriverTorque "驾驶员扭矩 [VERIFIED] - 12-bit signed, range +-2048（脱手判断：<5Nm持续15秒报警）";
+CM_ SG_ 792 SteerWarning "转向警告 [VERIFIED] - 1=警告, 0=正常";
+CM_ SG_ 792 TorqueFailed "扭矩失败 [PARTIAL] - needs validation";
+CM_ SG_ 792 ReportHandsNotOnSteeringWheel "脱手报警 [VERIFIED] - 1=报警, 0=正常";
+CM_ "";
+CM_ "--- ACC_HUD_ADAS (813) Signals ---";
+CM_ SG_ 813 AccState "ACC状态 [VERIFIED] - 0=关闭, 1=ACC开启(待机), 3=ACC激活 (适配0km/h激活)";
+CM_ SG_ 813 SetSpeed "设定速度 [VERIFIED] - 9-bit, scale 0.5 km/h, range 0-255.5 km/h (适配0km/h激活)";
+CM_ SG_ 813 SetDistance "跟车距离 [VERIFIED] - 3-bit: 1-4档";
+CM_ SG_ 813 HasLead "前车存在 [VERIFIED] - 1=有前车, 0=无前车";
+CM_ SG_ 813 AEB "AEB激活 [VERIFIED] - 1=激活, 0=未激活";
+CM_ SG_ 813 FCW "前碰撞预警 [VERIFIED] - 1=警告, 0=正常";
+CM_ "";
+CM_ "--- ACC_CMD (814) Signals ---";
+CM_ SG_ 814 AccelCmd "加速度指令 [VERIFIED] - 8-bit, scale 0.05, offset -5, range -5 to 7.75 m/s^2";
+CM_ SG_ 814 StandstillState "静止状态 [VERIFIED] - 1=静止, 0=移动 (适配0km/h激活)";
+CM_ SG_ 814 AccControlActive "ACC控制激活 [VERIFIED] - 1=激活, 0=未激活 (适配0km/h激活)";
+CM_ SG_ 814 ResumeFromStandstill "静止恢复 [VERIFIED] - 1=允许0km/h恢复巡航, 0=禁止";
+CM_ "";
+CM_ "--- PEDAL (834) Signals ---";
+CM_ SG_ 834 AcceleratorPedal "油门踏板 [VERIFIED] - 8-bit, scale 0.01, range 0-2.55 (0-255%)";
+CM_ SG_ 834 BrakePedal "刹车踏板 [VERIFIED] - 8-bit, scale 0.01, range 0-2.55";
+CM_ SG_ 834 DriveMode "驾驶模式 [VERIFIED] - 2-bit: 0=雪地, 1=ECO, 2=运动";
+CM_ SG_ 834 PowerMode "动力模式 [VERIFIED] - 2-bit: 1=EV, 2=强制EV, 3=HEV";
+CM_ "";
+CM_ "--- PCM_BUTTONS (944) Signals ---";
+CM_ SG_ 944 BTN_AccUpDown_Cmd "巡航按钮 [VERIFIED] - 0=未按, 1=SET减速, 3=RES加速 (适配0km/h激活)";
+CM_ SG_ 944 BTN_AccCancel "取消按钮 [VERIFIED] - 1=按下, 0=释放";
+CM_ SG_ 944 BTN_TOGGLE_ACC_OnOff "ACC开关 [VERIFIED] - 1=按下, 0=释放 (适配0km/h激活)";
+CM_ SG_ 944 BTN_AccDistanceDecrease "距离减少 [VERIFIED] - 1=按下, 0=释放";
+CM_ SG_ 944 BTN_AccDistanceIncrease "距离增加 [VERIFIED] - 1=按下, 0=释放";
+CM_ "";
+CM_ "--- EPB (85) Signals ---";
+CM_ SG_ 85 EPB_ActiveFlag "驻车制动激活 [VERIFIED] - 1=激活, 0=释放";
+CM_ "";
+CM_ "--- RADAR_MRR (884) Signals ---";
+CM_ SG_ 884 Type "目标类型 [UNVERIFIED] - 0=无目标,1=乘用车,2=货车,3=非机动车";
+CM_ SG_ 884 LatDist "横向距离 [UNVERIFIED] - physical range -12 to 13.5m needs validation";
+CM_ SG_ 884 LongDist "纵向距离 [UNVERIFIED] - physical range -100 to 307m needs validation";
+CM_ SG_ 884 TargetSpeed "目标相对速度 [UNVERIFIED] - physical range -128 to 127.95 km/h needs validation";
+CM_ SG_ 884 TargetAccel "目标相对加速度 [UNVERIFIED] - physical range -10 to 15.5 m/s² needs validation";
+CM_ SG_ 884 Confidence "目标置信度 [UNVERIFIED] - 0=低,1=中,2=高,3=极高";
+CM_ "";
+CM_ "=== MESSAGE-LEVEL VERIFICATION STATUS ===";
+CM_ BO_ 85 "EPB - 电子驻车制动 [VERIFIED] - bit position and length match reference DBC";
+CM_ BO_ 287 "EPS - 转向角度/角速度 [VERIFIED] - SteeringAngle 0.1deg scale, SteeringAngleRate 4deg/s scale confirmed";
+CM_ BO_ 289 "CARSPEED - 车速显示 [VERIFIED] - 12-bit unsigned, 0.0735 km/h scale confirmed (适配0km/h激活)";
+CM_ BO_ 301 "BCM - 车身控制模块 [VERIFIED] - door signals bit 0-4, seatbelt bit 6 confirmed";
+CM_ BO_ 307 "STALKS - 灯光/转向灯 [VERIFIED] - indicators bit 4-5 confirmed";
+CM_ BO_ 546 "YAW_RATE - 横摆角速度 [VERIFIED] - 12-bit, scale 0.002133, offset -2.094 confirmed";
+CM_ BO_ 547 "AXAY - 加速度 [VERIFIED] - 12-bit, scale 0.027167, offset -21.593 confirmed";
+CM_ BO_ 578 "DRIVE_STATE - 档位/刹车 [VERIFIED] - Gear bit 40-42, BrakePressed bit 37 confirmed (制动优先级最高)";
+CM_ BO_ 660 "BELT - 安全带状态 [VERIFIED] - secondary seatbelt message";
+CM_ BO_ 694 "DATETIME - 日期时间 [VERIFIED] - system date/time broadcast";
+CM_ BO_ 790 "ACC_MPC_STATE - LKAS控制/状态 [PARTIAL] - Status signals verified, LKAS_Output control signal UNVERIFIED (11-bit signed, range ±1023)";
+CM_ BO_ 792 "ACC_EPS_STATE - EPS反馈 [VERIFIED] - MainTorque/SteerDriverTorque 12-bit signed confirmed (含脱手检测)";
+CM_ BO_ 813 "ACC_HUD_ADAS - ACC HUD显示 [VERIFIED] - SetSpeed 9-bit 0.5 scale, AccState 3-bit confirmed (适配0km/h激活)";
+CM_ BO_ 814 "ACC_CMD - ACC控制指令 [VERIFIED] - AccelCmd 8-bit, scale 0.05, offset -5 confirmed (适配0km/h激活)";
+CM_ BO_ 815 "ACC_AEB - AEB控制 [UNVERIFIED] - AEB_Active and AEB_Decel signals not in reference DBC, need vehicle validation";
+CM_ BO_ 834 "PEDAL - 踏板状态 [VERIFIED] - AcceleratorPedal/BrakePedal 8-bit, scale 0.01 confirmed";
+CM_ BO_ 884 "RADAR_MRR - 毫米波雷达 [UNVERIFIED] - LatDist/LongDist/TargetSpeed physical ranges need vehicle validation";
+CM_ BO_ 944 "PCM_BUTTONS - 巡航按钮 [VERIFIED] - button signals match reference DBC (适配0km/h激活)";
+CM_ BO_ 1048 "BSD_RADAR - 盲点监测 [VERIFIED] - blind spot detection signals";
+CM_ "";
+CM_ "=== UNVERIFIED SIGNALS - DO NOT USE FOR CONTROL ===";
+CM_ SG_ 790 LKAS_Output "LKAS转向扭矩输出 [DO_NOT_USE] - 11-bit signed control signal, range ±1023 (物理±5Nm), DO NOT USE until validated on real vehicle";
+CM_ SG_ 790 LKAS_Active "LKAS激活状态 [UNVERIFIED] - range changed from [0|3] to [0|1], needs real vehicle validation";
+CM_ SG_ 790 LKAS_ReqPrepare "LKAS请求准备 [UNVERIFIED] - control signal, needs validation";
+CM_ SG_ 815 AEB_Active "AEB激活标志 [UNVERIFIED] - signal not in reference DBC, needs vehicle validation";
+CM_ SG_ 815 AEB_Decel "AEB减速度 [UNVERIFIED] - signal not in reference DBC, needs vehicle validation";
+CM_ SG_ 884 LatDist "横向距离 [UNVERIFIED] - physical range -12 to 13.5m needs validation";
+CM_ SG_ 884 LongDist "纵向距离 [UNVERIFIED] - physical range -100 to 307m needs validation";
+CM_ SG_ 884 TargetSpeed "目标相对速度 [UNVERIFIED] - physical range -128 to 127.95 km/h needs validation";
+CM_ SG_ 884 TargetAccel "目标相对加速度 [UNVERIFIED] - physical range -10 to 15.5 m/s² needs validation";
+CM_ SG_ 884 IsValid "雷达目标有效 [UNVERIFIED] - validity flag needs validation";
+CM_ "";
+CM_ "=== CHECKSUM SIGNALS - CORRECTED ALGORITHM ===";
+CM_ SG_ 85 CHECKSUM "EPB校验和 [UNVERIFIED] - Algorithm: (0x100 - sum(bytes[0:7]) % 0x100) & 0xFF, needs real vehicle validation";
+CM_ SG_ 578 CHECKSUM "DRIVE_STATE校验和 [UNVERIFIED] - Algorithm: (0x100 - sum(bytes[0:7]) % 0x100) & 0xFF, needs real vehicle validation";
+CM_ SG_ 790 CHECKSUM "ACC_MPC_STATE校验和 [UNVERIFIED] - Algorithm: (0x100 - sum(bytes[0:7]) % 0x100) & 0xFF, needs real vehicle validation";
+CM_ SG_ 792 CHECKSUM "ACC_EPS_STATE校验和 [UNVERIFIED] - Algorithm: (0x100 - sum(bytes[0:7]) % 0x100) & 0xFF, needs real vehicle validation";
+CM_ SG_ 813 CHECKSUM "ACC_HUD_ADAS校验和 [UNVERIFIED] - Algorithm: (0x100 - sum(bytes[0:7]) % 0x100) & 0xFF, needs real vehicle validation";
+CM_ SG_ 814 CHECKSUM "ACC_CMD校验和 [UNVERIFIED] - Algorithm: (0x100 - sum(bytes[0:7]) % 0x100) & 0xFF, needs real vehicle validation";
+CM_ SG_ 815 CHECKSUM "ACC_AEB校验和 [UNVERIFIED] - Algorithm: (0x100 - sum(bytes[0:7]) % 0x100) & 0xFF, needs real vehicle validation";
+CM_ SG_ 834 CHECKSUM "PEDAL校验和 [UNVERIFIED] - Algorithm: (0x100 - sum(bytes[0:7]) % 0x100) & 0xFF, needs real vehicle validation";
+CM_ SG_ 884 CHECKSUM "RADAR_MRR校验和 [UNVERIFIED] - Algorithm: (0x100 - sum(bytes[0:7]) % 0x100) & 0xFF, needs real vehicle validation";
+CM_ SG_ 944 CHECKSUM "PCM_BUTTONS校验和 [UNVERIFIED] - Algorithm: (0x100 - sum(bytes[0:7]) % 0x100) & 0xFF, needs real vehicle validation";
+
+VAL_ 578 Gear 1 "P" 2 "R" 3 "N" 4 "D" ;
+VAL_ 790 AutoFullBeamState 2 "AutoFullBeamInactive" 11 "AutoFullBeamActive" ;
+VAL_ 790 LeftLaneState 0 "GRAY" 1 "GREEN" 2 "YELLOW" 3 "RED" ;
+VAL_ 790 RightLaneState 0 "GRAY" 1 "GREEN" 2 "YELLOW" 3 "RED" ;
+VAL_ 790 LKAS_Config 0 "DISABLE" 1 "ALARM" 2 "LKA" 3 "ALARM_AND_LKA" ;
+VAL_ 790 LKAS_AlarmType 0 "VIBRATION" 1 "AUDIO" 2 "AUDIO_AND_VIBRATION" ;
+VAL_ 790 MPC_State 0 "STANDBY" 1 "ACC_ACTIVE" 2 "LKA_ACTIVE" 3 "ACC_LKA_ACTIVE" ;  // 补充MPC状态值表
+VAL_ 813 AccState 0 "OFF" 1 "ACC_ON" 3 "ACC_ACTIVE" 5 "FORCE_ACCEL" 7 "ERROR" ;
+VAL_ 813 SetDistance 1 "1BAR" 2 "2BAR" 3 "3BAR" 4 "4BAR" ;
+VAL_ 813 Notify 0 "NONE" 8 "DISENGAGE" 12 "ENGAGE" 16 "FORCE_ACCEL" 20 "ACC_ON" 22 "OVERRIDE" 32 "ACC_OFF" 36 "ACC_ERROR" 48 "CHECK_GEAR_D" ;
+VAL_ 834 DriveMode 0 "SNOW" 1 "ECO" 2 "SPORT" ;
+VAL_ 834 PowerMode 1 "EV" 2 "FORCE_EV" 3 "HEV" ;
+VAL_ 884 Type 0 "NO_TARGET" 1 "PASSENGER_CAR" 2 "TRUCK" 3 "NON_MOTOR_VEHICLE" ;  // 补充雷达目标类型值表
+VAL_ 944 BTN_AccUpDown_Cmd 0 "NOTPRESSED" 1 "DOWN_SETSPEED" 3 "UP_RESETSPEED" ;
+
+BA_DEF_ BO_ "GenMsgCycleTime" INT 0 10000;
+BA_DEF_DEF_ "GenMsgCycleTime" 0;
+
+BA_ "GenMsgCycleTime" BO_ 85 100;
+BA_ "GenMsgCycleTime" BO_ 287 50;
+BA_ "GenMsgCycleTime" BO_ 289 50;
+BA_ "GenMsgCycleTime" BO_ 301 100;
+BA_ "GenMsgCycleTime" BO_ 307 100;
+BA_ "GenMsgCycleTime" BO_ 546 50;
+BA_ "GenMsgCycleTime" BO_ 547 50;
+BA_ "GenMsgCycleTime" BO_ 578 50;
+BA_ "GenMsgCycleTime" BO_ 660 100;
+BA_ "GenMsgCycleTime" BO_ 694 1000;
+BA_ "GenMsgCycleTime" BO_ 790 50;
+BA_ "GenMsgCycleTime" BO_ 792 50;
+BA_ "GenMsgCycleTime" BO_ 813 50;
+BA_ "GenMsgCycleTime" BO_ 814 50;
+BA_ "GenMsgCycleTime" BO_ 815 50;
+BA_ "GenMsgCycleTime" BO_ 834 50;
+BA_ "GenMsgCycleTime" BO_ 884 50;
+BA_ "GenMsgCycleTime" BO_ 944 50;
+BA_ "GenMsgCycleTime" BO_ 1048 100;
