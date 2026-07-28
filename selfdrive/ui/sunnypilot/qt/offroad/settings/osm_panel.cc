@@ -19,7 +19,7 @@ OsmPanel::OsmPanel(QWidget *parent) : QFrame(parent) {
   main_layout = new QStackedLayout(this);
 
   const auto list = new ListWidgetSP(this, false);
-  list->addItem(mapdVersion = new LabelControlSP(tr("Mapd Version"), "Loading..."));
+  list->addItem(mapdVersion = new LabelControlSP(tr("Mapd Version"), tr("Loading...")));
   list->addItem(setupOsmDeleteMapsButton(parent));
   list->addItem(offlineMapsETA = new LabelControlSP(tr("Offline Maps ETA"), ""));
   list->addItem(offlineMapsElapsed = new LabelControlSP(tr("Time Elapsed"), ""));

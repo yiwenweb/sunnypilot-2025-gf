@@ -2849,5 +2849,40 @@ Bottom</source>
         <source>Forget</source>
         <translation>忽略</translation>
     </message>
+
+    <message>
+        <source>Onroad Brightness Delay</source>
+        <translation>行驶屏幕延迟关闭</translation>
+    </message>
+
+    <message>
+        <source>Onroad Brightness</source>
+        <translation>行驶屏幕亮度</translation>
+    </message>
+
+    <message>
+        <source> Screen Off</source>
+        <translation> 关屏</translation>
+    </message>
+
+    <message>
+        <source>Short Press</source>
+        <translation>短按</translation>
+    </message>
+
+    <message>
+        <source>Long Press</source>
+        <translation>长按</translation>
+    </message>
+
+    <message>
+        <source> (Default)</source>
+        <translation>（默认）</translation>
+    </message>
+
+    <message>
+        <source>Loading...</source>
+        <translation>加载中...</translation>
+    </message>
 </context>
 </TS>

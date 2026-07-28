@@ -37,11 +37,11 @@ AccIncrementOptionControl::AccIncrementOptionControl(const QString &param, const
 void AccIncrementOptionControl::refresh() {
   std::string val = params.get(param_name);
   std::string label = "<span style='font-size: 45px; font-weight: 450; color: #FFFFFF;'>";
-  label += param_name == "CustomAccShortPressIncrement" ? "Short Press" : "Long Press";
+  label += (param_name == "CustomAccShortPressIncrement" ? tr("Short Press") : tr("Long Press")).toStdString();
   label += " <br><span style='font-size: 40px; font-weight: 450; color:rgb(174, 255, 195);'>" + val;
   label += param_name == "CustomAccShortPressIncrement"
-             ? (val == "1" ? " (Default)" : "")
-             : (val == "5" ? " (Default)" : "");
+             ? (val == "1" ? tr(" (Default)").toStdString() : "")
+             : (val == "5" ? tr(" (Default)").toStdString() : "");
   label += "</span></span>";
   setLabel(QString::fromStdString(label));
 }
