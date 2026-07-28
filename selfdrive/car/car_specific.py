@@ -124,6 +124,9 @@ class CarSpecificEvents:
       events = self.create_common_events(CS, CS_prev, extra_gears=(GearShifter.sport, GearShifter.manumatic),
                                          pcm_enable=self.CP.pcmCruise, allow_button_cancel=False)
 
+    elif self.CP.brand == 'byd':
+      events = self.create_common_events(CS, CS_prev, pcm_enable=self.CP.pcmCruise)
+
     else:
       events = self.create_common_events(CS, CS_prev)
 
