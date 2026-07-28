@@ -10,6 +10,7 @@ void pandad_main_thread(std::vector<std::string> serials);
 
 // deprecated devices
 static const std::vector<cereal::PandaState::PandaType> SUPPORTED_PANDA_TYPES = {
+  cereal::PandaState::PandaType::DOS,
   cereal::PandaState::PandaType::RED_PANDA,
   cereal::PandaState::PandaType::TRES,
   cereal::PandaState::PandaType::CUATRO,
