@@ -244,11 +244,11 @@ This only toggles the visibility of the controls; it does not toggle the actual 
     </message>
     <message>
         <source>When toggled on, this creates a prebuilt file to allow accelerated boot times. When toggled off, it immediately removes the prebuilt file so compilation of locally edited cpp files can be made. &lt;br&gt;&lt;br&gt;&lt;b&gt;To edit C++ files locally on device, you MUST first turn off this toggle so the changes can recompile.&lt;/b&gt;</source>
-        <translation>开启时创建预编译文件以加速启动。关闭时立即移除预编译文件以允许本地编辑。<br><br><b>要在设备上编辑 C++ 文件，必须先关闭此开关以便重新编译。</b></translation>
+        <translation>开启时创建预编译文件以加速启动。关闭时立即移除预编译文件以允许本地编辑。&lt;br&gt;&lt;br&gt;&lt;b&gt;要在设备上编辑 C++ 文件，必须先关闭此开关以便重新编译。&lt;/b&gt;</translation>
     </message>
     <message>
         <source>Quickboot mode requires updates to be disabled.&lt;br&gt;Enable &apos;Disable Updates&apos; in the Software panel first.</source>
-        <translation>快速启动模式需要禁用更新。<br>请先在软件面板中启用“禁用更新”。</translation>
+        <translation>快速启动模式需要禁用更新。&lt;br&gt;请先在软件面板中启用“禁用更新”。</translation>
     </message>
     <message>
         <source>Enable Copyparty service</source>
@@ -708,7 +708,7 @@ Firehose Mode allows you to maximize your training data uploads to improve openp
     </message>
     <message>
         <source>For maximum effectiveness, bring your device inside and connect to a good USB-C adapter and Wi-Fi weekly.&lt;br&gt;&lt;br&gt;Firehose Mode can also work while you&apos;re driving if connected to a hotspot or unlimited SIM card.&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;Frequently Asked Questions&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;i&gt;Does it matter how or where I drive?&lt;/i&gt; Nope, just drive as you normally would.&lt;br&gt;&lt;br&gt;&lt;i&gt;Do all of my segments get pulled in Firehose Mode?&lt;/i&gt; No, we selectively pull a subset of your segments.&lt;br&gt;&lt;br&gt;&lt;i&gt;What&apos;s a good USB-C adapter?&lt;/i&gt; Any fast phone or laptop charger should be fine.&lt;br&gt;&lt;br&gt;&lt;i&gt;Does it matter which software I run?&lt;/i&gt; Yes, only upstream sunnypilot (and particular forks) are able to be used for training.</source>
-        <translation>为最佳效果，每周将设备连接 USB-C 充电器和 Wi-Fi。<br><br>Firehose 模式在连接热点或无限流量 SIM 时也可行驶中使用。<br><br><br><b>常见问题</b><br><br><i>驾驶方式和地点有要求吗？</i> 无，正常驾驶即可。<br><br><i>所有路段都会被上传吗？</i> 否，仅选择性上传部分路段。<br><br><i>推荐什么 USB-C 充电器？</i> 任何快充手机或笔记本充电器均可。<br><br><i>对软件有要求吗？</i> 是，仅上游 sunnypilot（及特定分支）可用于训练。</translation>
+        <translation>为最佳效果，每周将设备连接 USB-C 充电器和 Wi-Fi。&lt;br&gt;&lt;br&gt;Firehose 模式在连接热点或无限流量 SIM 时也可行驶中使用。&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;常见问题&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;i&gt;驾驶方式和地点有要求吗？&lt;/i&gt; 无，正常驾驶即可。&lt;br&gt;&lt;br&gt;&lt;i&gt;所有路段都会被上传吗？&lt;/i&gt; 否，仅选择性上传部分路段。&lt;br&gt;&lt;br&gt;&lt;i&gt;推荐什么 USB-C 充电器？&lt;/i&gt; 任何快充手机或笔记本充电器均可。&lt;br&gt;&lt;br&gt;&lt;i&gt;对软件有要求吗？&lt;/i&gt; 是，仅上游 sunnypilot（及特定分支）可用于训练。</translation>
     </message>
 </context>
 <context>
@@ -1312,7 +1312,7 @@ The default software delay value is 0.2</source>
     </message>
     <message>
         <source>Formerly known as &lt;b&gt;&quot;NNFF&quot;&lt;/b&gt;, this replaces the lateral &lt;b&gt;&quot;torque&quot;&lt;/b&gt; controller, with one using a neural network trained on each car&apos;s (actually, each separate EPS firmware) driving data for increased controls accuracy.</source>
-        <translation>前称 <b>NNFF</b>，使用针对每辆车（每种 EPS 固件）的驾驶数据训练的神经网络替代横向 <b>扭矩</b> 控制器，提高控制精度。</translation>
+        <translation>前称 &lt;b&gt;NNFF&lt;/b&gt;，使用针对每辆车（每种 EPS 固件）的驾驶数据训练的神经网络替代横向 &lt;b&gt;扭矩&lt;/b&gt; 控制器，提高控制精度。</translation>
     </message>
     <message>
         <source>Reach out to the sunnypilot team in the following channel at the sunnypilot Discord server</source>
@@ -1391,7 +1391,7 @@ The default software delay value is 0.2</source>
     </message>
     <message>
         <source>&lt;b&gt;Unsupported branch detected&lt;/b&gt; - The current version of &lt;b&gt;&lt;u&gt;%1&lt;/u&gt;&lt;/b&gt; branch is no longer supported on the comma three. Please go to &lt;b&gt;[Device &gt; Software]&lt;/b&gt; and install a supported branch with &lt;b&gt;&lt;u&gt;-tici&lt;/u&gt;&lt;/b&gt; in the branch name for the comma three.</source>
-        <translation><b>检测到不支持的分支</b> - 当前版本 <b><u>%1</u></b> 不再支持 comma three。请前往 <b>[设备 > 软件]</b> 安装名称含 <b><u>-tici</u></b> 的分支。</translation>
+        <translation>&lt;b&gt;检测到不支持的分支&lt;/b&gt; - 当前版本 &lt;b&gt;&lt;u&gt;%1&lt;/u&gt;&lt;/b&gt; 不再支持 comma three。请前往 &lt;b&gt;[设备 > 软件]&lt;/b&gt; 安装名称含 &lt;b&gt;&lt;u&gt;-tici&lt;/u&gt;&lt;/b&gt; 的分支。</translation>
     </message>
 </context>
 <context>
@@ -2129,7 +2129,7 @@ Data</source>
     </message>
     <message>
         <source>When enabled, software updates will be disabled. &lt;b&gt;This requires a reboot to take effect.&lt;/b&gt;</source>
-        <translation>启用后软件更新将被禁用。<b>需重启生效。</b></translation>
+        <translation>启用后软件更新将被禁用。&lt;b&gt;需重启生效。&lt;/b&gt;</translation>
     </message>
     <message>
         <source>No branches found for keywords: %1</source>
@@ -2601,7 +2601,7 @@ Data</source>
     </message>
     <message>
         <source>sunnypilot defaults to driving in &lt;b&gt;chill mode&lt;/b&gt;. Experimental mode enables &lt;b&gt;alpha-level features&lt;/b&gt; that aren&apos;t ready for chill mode. Experimental features are listed below:</source>
-        <translation>sunnypilot 默认以<b>舒适模式</b>驾驶。实验模式启用<b>Alpha级功能</b>，包括：</translation>
+        <translation>sunnypilot 默认以&lt;b&gt;舒适模式&lt;/b&gt;驾驶。实验模式启用&lt;b&gt;Alpha级功能&lt;/b&gt;，包括：</translation>
     </message>
     <message>
         <source>Let the driving model control the gas and brakes. sunnypilot will drive as it thinks a human would, including stopping for red lights and stop signs. Since the driving model decides the speed to drive, the set speed will only act as an upper bound. This is an alpha quality feature; mistakes should be expected.</source>
