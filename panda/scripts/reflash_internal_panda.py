@@ -38,11 +38,14 @@ if __name__ == "__main__":
 
   # bootstub flash takes 2s and is limited by the 255 byte flashing chunk size
   print("flashing bootstub")
-  assert Panda.wait_for_dfu(None, 5)
   PandaDFU(None).recover()
 
+  gpio_set(GPIO.STM_RST_N, 1)
+  time.sleep(0.5)
+  gpio_set(GPIO.STM_RST_N, 0)
+  time.sleep(1)
+
   print("flashing app")
-  assert Panda.wait_for_panda(None, 5)
   p = Panda()
   assert p.bootstub
   p.flash()
