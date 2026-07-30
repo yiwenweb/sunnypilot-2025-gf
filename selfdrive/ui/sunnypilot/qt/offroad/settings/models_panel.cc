@@ -225,6 +225,8 @@ void ModelsPanel::handleBundleDownloadProgress() {
         modelFrame = visionFrame;
         break;
       case cereal::ModelManagerSP::Model::Type::POLICY:
+      case cereal::ModelManagerSP::Model::Type::OFF_POLICY:
+      case cereal::ModelManagerSP::Model::Type::ON_POLICY:
         progressBar = policyProgressBar;
         modelFrame = policyFrame;
         break;
