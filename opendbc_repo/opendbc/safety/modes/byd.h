@@ -152,11 +152,13 @@ static bool byd_tx_hook(const CANPacket_t *msg) {
     if (steer_torque_cmd_checks(lkas_output, steer_req, BYD_STEERING_LIMITS)) {
       tx = false;
     }
-    // Mark OP steering active
-    if (tx) {
-      byd_op_steering_active = true;
-      byd_op_steering_ts = microsecond_timer_get();
-    }
+    // Mark OP steering active on EVERY 790 TX attempt (even if torque-check rejected).
+    // 之前只在 tx 通过时刷新, 一旦连续几帧被 rate/torque limiter 拒(硬限速段常见), active
+    // 会在 100ms 内误超时 -> fwd_hook 放行摄像头 316(Active=0) 与 OP 的"要转"命令混流 ->
+    // EPS 看到矛盾流。改为只要 OP 在发 790 就刷新, 保证接管期间门控连续不漏(堵泄漏),
+    // 同时 OP 沉默(崩溃/未接管)>100ms 才超时放行摄像头原厂 316 作 fail-safe(防断供锁死)。
+    byd_op_steering_active = true;
+    byd_op_steering_ts = microsecond_timer_get();
   }
 
   // 814 ACC_CMD / 813 ACC_HUD_ADAS / 815 ACC_AEB on Bus 0
@@ -198,20 +200,23 @@ static bool byd_fwd_hook(int bus_num, int addr) {
     }
   }
 
-  // Bus 2 -> Bus 0: ALWAYS block MPC's 790 (316) from reaching the EPS bus.
-  // Confirmed from rlog (门总 vs ours): in 门总 the EPS bus carries ONLY OP's 316
-  // (Active=1), MPC's stock 316 stays isolated on bus2. In ours, MPC's stock 316
-  // (Active=0, byte-identical to src=2) was leaking onto bus0 because the block was
-  // gated on byd_op_steering_active — any gap (OP sending Active=0 frames, a tx-check
-  // miss, or the 100ms timeout edge) let MPC's Active=0 316 reach the EPS at 50Hz,
-  // so the EPS saw a "don't steer" stream mixed with OP's "steer" command. Block it
-  // unconditionally so the EPS only ever hears OP, matching 门总.
+  // Bus 2 -> Bus 0: block MPC's 790 (316) from reaching the EPS bus ONLY while OP is
+  // actively sending its own 790 (byd_op_steering_active, refreshed every OP 790 TX).
+  // 【根因修复 (EPS 启动即锁死)】: 之前此处无条件拦截摄像头 316, 前提假设"OP 总会发自己的
+  //   316 替代"。但上电后 ACC 未激活/MADS 未触发 -> controls_allowed=False, latActive=False
+  //   -> OP 一帧 316 都不发 (rlog 实证 sendcan 790=0)。结果 EPS 既收不到摄像头 316 也收不到
+  //   OP 316 -> 转向命令流完全断供 -> 握手成功(0xFB)后约 1s EPS 判命令流丢失 -> TorqueFailed
+  //   锁死 (LOCK1: f1648 握手 -> f1698 TorqueFailed)。这不是"混流"问题, 是"断供"问题。
+  // 【修复】: 门控拦截。OP 在发 316(接管中) -> 拦摄像头 316, EPS 只听 OP(消除混流, 原泄漏已由
+  //   tx_hook 每帧刷新 active 堵住); OP 沉默>100ms(未接管/崩溃/退出) -> active 超时 -> 放行
+  //   摄像头原厂 316, EPS 始终有合法转向源 -> 永不断供锁死。这才是 openpilot relay 的 fail-safe
+  //   本意: OP 不接管时原厂信号必须能通到 EPS。
   // Block MPC's 814/813/815 when OP is taking over (sending its own ACC 报文组).
   // 对齐门总: OP 接管期间, 摄像头的 813/814/815 从 bus2->bus0 全部拦截, ESC 只听 OP 的一套
   // 连续 counter 报文组, 避免双源 counter 冲突导致车机 ACC 报错。OP 停发 100ms 超时后自动恢复
   // 全透传 (byd_op_acc_active 超时清零), 保证异常/退出时原厂 ACC/AEB 立即接管。
   if (bus_num == 2) {
-    if (addr == BYD_ACC_MPC_STATE) {
+    if ((addr == BYD_ACC_MPC_STATE) && byd_op_steering_active) {
       return true;
     }
     if (byd_op_acc_active && ((addr == BYD_ACC_CMD) || (addr == BYD_ACC_HUD_ADAS) || (addr == BYD_ACC_AEB))) {
