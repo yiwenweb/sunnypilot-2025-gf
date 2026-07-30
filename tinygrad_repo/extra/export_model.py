@@ -10,7 +10,7 @@ from tinygrad.uop.ops import Ops
 import json
 from collections import OrderedDict
 
-EXPORT_SUPPORTED_DEVICE = ["WEBGPU", "CPU", "CUDA", "GPU"]
+EXPORT_SUPPORTED_DEVICE = ["WEBGPU", "CPU", "CUDA", "CL"]
 
 def compile_net(run:TinyJit, special_names:Dict[int,str]) -> Tuple[Dict[str,str],List[Tuple[str,List[str],List[int]]],Dict[str,Tuple[int,DType,int]],Dict[str,Tensor]]:
   functions, bufs, bufs_to_save, statements, bufnum = {}, {}, {}, [], 0
@@ -239,7 +239,9 @@ export default {model_name};
 
 def export_model(model, target:str, *inputs, model_name: Optional[str] = "model", stream_weights=False):
   assert Device.DEFAULT in EXPORT_SUPPORTED_DEVICE, f"only {', '.join(EXPORT_SUPPORTED_DEVICE)} are supported"
-  with Context(JIT=2): run,special_names = jit_model(model, *inputs)
+
+  # NOTE: CPU_COUNT=1, since export does not support threading
+  with Context(JIT=2, CPU_COUNT=1): run,special_names = jit_model(model, *inputs)
   functions, statements, bufs, bufs_to_save = compile_net(run, special_names)
   state = get_state_dict(model)
   weight_names = {id(x.uop.base.realized): name for name, x in state.items()}

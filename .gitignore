@@ -71,10 +71,10 @@ flycheck_*
 cppcheck_report.txt
 comma*.sh
 
-selfdrive/modeld/models/*.pkl
+# 2026 model migration: pre-compiled tinygrad 0.12.0 pkl are committed to the repo
+# (aligned with sp2025-ysb deployment route), so do NOT ignore modeld pkl anymore.
 sunnypilot/modeld*/thneed/compile
 sunnypilot/modeld*/models/*.thneed
-sunnypilot/modeld*/models/*.pkl
 
 *.bz2
 *.zst
