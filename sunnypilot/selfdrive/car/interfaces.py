@@ -40,6 +40,8 @@ def _initialize_neural_network_lateral_control(CP: structs.CarParams, CP_SP: str
   if params is None:
     params = Params()
 
+  if not params.get_bool("NeuralNetworkLateralControl"):
+    return False
   nnlc_model_path, nnlc_model_name, exact_match = get_nn_model_path(CP)
 
   if nnlc_model_name == "MOCK":
