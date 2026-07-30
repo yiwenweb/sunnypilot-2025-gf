@@ -5,19 +5,29 @@ from cereal import log
 from openpilot.sunnypilot.modeld_v2.constants import ModelConstants, Plan
 from openpilot.sunnypilot.models.helpers import plan_x_idxs_helper
 from openpilot.selfdrive.controls.lib.drive_helpers import get_curvature_from_plan
+from openpilot.common.swaglog import cloudlog
 
 SEND_RAW_PRED = os.getenv('SEND_RAW_PRED')
 
 ConfidenceClass = log.ModelDataV2.ConfidenceClass
 
+# 调试日志开关，设为 0 关闭调试输出
+DEBUG_LOG = int(os.getenv('FILL_MODEL_MSG_DEBUG', '1'))
 
-def get_curvature_from_output(output, vego, lat_action_t, mlsim):
+
+def get_curvature_from_output(output, plan, vego, lat_action_t, mlsim):
   if not mlsim:
-    if desired_curv := output.get('desired_curvature'):  # If the model outputs the desired curvature, use that directly
+    if desired_curv := output.get('desired_curvature'):  # 如果模型直接输出 desired_curvature，则直接使用
+      if DEBUG_LOG:
+        cloudlog.info(f"[fill_model_msg] desired_curvature path: val={float(desired_curv[0, 0]):.6f}")
       return float(desired_curv[0, 0])
 
-  plan_output = output['plan'][0]
-  return float(get_curvature_from_plan(plan_output[:, Plan.T_FROM_CURRENT_EULER][:, 2], plan_output[:, Plan.ORIENTATION_RATE][:, 2],
+  if DEBUG_LOG:
+    yaw_rate = plan[:, Plan.ORIENTATION_RATE][:, 2]
+    cloudlog.info(f"[fill_model_msg] curvature_from_plan: vego={vego:.3f}, lat_action_t={lat_action_t:.4f}, "
+                   f"plan_shape={plan.shape}, yaw_rate_range=[{yaw_rate.min():.6f}, {yaw_rate.max():.6f}]")
+
+  return float(get_curvature_from_plan(plan[:, Plan.T_FROM_CURRENT_EULER][:, 2], plan[:, Plan.ORIENTATION_RATE][:, 2],
                                        ModelConstants.T_IDXS, vego, lat_action_t))
 
 
@@ -94,6 +104,24 @@ def fill_model_msg(base_msg: capnp._DynamicStructBuilder, extended_msg: capnp._D
   modelV2.modelExecutionTime = model_execution_time
 
   # plan
+  if DEBUG_LOG:
+    plan_data = net_output_data['plan']
+    plan_stds = net_output_data['plan_stds']
+    cloudlog.info(f"[fill_model_msg] plan shape={plan_data.shape}, dtype={plan_data.dtype}, "
+                   f"range=[{plan_data.min():.6f}, {plan_data.max():.6f}]")
+    cloudlog.info(f"[fill_model_msg] plan_stds shape={plan_stds.shape}, range=[{plan_stds.min():.6f}, {plan_stds.max():.6f}]")
+    if 'planplus' in net_output_data:
+      pp = net_output_data['planplus']
+      pp_stds = net_output_data.get('planplus_stds')
+      cloudlog.info(f"[fill_model_msg] planplus shape={pp.shape}, range=[{pp.min():.6f}, {pp.max():.6f}]")
+      if pp_stds is not None:
+        cloudlog.info(f"[fill_model_msg] planplus_stds shape={pp_stds.shape}, range=[{pp_stds.min():.6f}, {pp_stds.max():.6f}]")
+    else:
+      cloudlog.info("[fill_model_msg] planplus NOT in output")
+    # 输出所有 key 及其 shape
+    keys_info = {k: v.shape for k, v in net_output_data.items()}
+    cloudlog.info(f"[fill_model_msg] output keys: {keys_info}")
+
   fill_xyzt(modelV2.position, ModelConstants.T_IDXS, *net_output_data['plan'][0,:,Plan.POSITION].T, *net_output_data['plan_stds'][0,:,Plan.POSITION].T)
   fill_xyzt(modelV2.velocity, ModelConstants.T_IDXS, *net_output_data['plan'][0,:,Plan.VELOCITY].T)
   fill_xyzt(modelV2.acceleration, ModelConstants.T_IDXS, *net_output_data['plan'][0,:,Plan.ACCELERATION].T)
@@ -140,6 +168,11 @@ def fill_model_msg(base_msg: capnp._DynamicStructBuilder, extended_msg: capnp._D
   modelV2.roadEdgeStds = net_output_data['road_edges_stds'][0,:,0,0].tolist()
 
   # leads
+  if DEBUG_LOG:
+    lead_data = net_output_data['lead']
+    lead_prob = net_output_data['lead_prob']
+    cloudlog.info(f"[fill_model_msg] lead shape={lead_data.shape}, prob={lead_prob[0].tolist()}")
+
   modelV2.init('leadsV3', 3)
   for i in range(3):
     lead = modelV2.leadsV3[i]

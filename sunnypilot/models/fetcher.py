@@ -73,8 +73,15 @@ class ModelParser:
 
   @staticmethod
   def parse_models(json_data: dict) -> list[custom.ModelManagerSP.ModelBundle]:
-    found_bundles = [ModelParser._parse_bundle(bundle) for bundle in json_data.get("bundles", [])]
-    return [bundle for bundle in found_bundles if is_bundle_version_compatible(bundle.to_dict())]
+    bundles_raw = json_data.get("bundles", [])
+    found_bundles = [ModelParser._parse_bundle(bundle) for bundle in bundles_raw]
+
+    compatible_bundles = []
+    for bundle in found_bundles:
+      is_compat = is_bundle_version_compatible(bundle.to_dict())
+      if is_compat:
+        compatible_bundles.append(bundle)
+    return compatible_bundles
 
 
 class ModelCache:
@@ -116,19 +123,46 @@ class ModelCache:
 
 class ModelFetcher:
   """Handles fetching and caching of model data from remote source"""
-  MODEL_URL = "https://docs.sunnypilot.ai/driving_models_v8.json"
+  # 官方模型配置 URL (直接使用 GitHub raw URL 避免 301 重定向延迟)
+  MODEL_URL = "https://op.berrysoft.net/data/storage/driving_models_v16.json"
+  # 本地自定义模型配置路径 (设置为 None 禁用自定义模型)
+  CUSTOM_JSON_PATH = "/data/openpilot/sunnypilot/models/customer/my_models.json"
 
   def __init__(self, params: Params):
     self.params = params
     self.model_cache = ModelCache(params)
     self.model_parser = ModelParser()
 
+  def _load_local_json(self, file_path: str) -> list[custom.ModelManagerSP.ModelBundle] | None:
+    """从本地 JSON 文件加载模型配置（不影响官方模型缓存）"""
+    import json
+    try:
+      with open(file_path, 'r', encoding='utf-8') as f:
+        json_data = json.load(f)
+      # 注意：不要设置缓存，避免覆盖官方模型数据
+      # self.model_cache.set(json_data)  # 已移除
+      cloudlog.info(f"成功加载本地模型配置: {file_path}")
+      return self.model_parser.parse_models(json_data)
+    except FileNotFoundError:
+      cloudlog.error(f"本地模型配置文件不存在: {file_path}")
+    except json.JSONDecodeError as e:
+      cloudlog.error(f"本地模型配置 JSON 解析失败: {e}")
+    except Exception as e:
+      cloudlog.exception(f"加载本地模型配置时发生错误: {e}")
+    return None
+
   def _fetch_and_cache_models(self) -> list[custom.ModelManagerSP.ModelBundle] | None:
     """Fetches fresh model data from remote and updates cache.
     Returns None on transport errors. Raises on 404 and other fatal HTTP errors.
+    支持本地文件: 使用 file:// 前缀
     """
+    # 检查是否为本地文件路径
+    if self.MODEL_URL.startswith("file://"):
+      local_path = self.MODEL_URL[7:]  # 去掉 "file://" 前缀
+      return self._load_local_json(local_path)
+
     try:
-      response = requests.get(self.MODEL_URL, timeout=10)
+      response = requests.get(self.MODEL_URL, timeout=60)
 
       # Explicitly handle 404 differently
       if response.status_code == 404:
@@ -140,48 +174,45 @@ class ModelFetcher:
 
       json_data = response.json()
       self.model_cache.set(json_data)
-      cloudlog.debug("Successfully updated models cache")
       return self.model_parser.parse_models(json_data)
 
-    except ConnectionError as e:
-      cloudlog.warning(f"DNS/connection error while fetching models: {e}")
-    except SSLError as e:
-      cloudlog.warning(f"SSL error while fetching models: {e}")
-    except RequestException as e:
-      cloudlog.warning(f"Request transport error while fetching models: {e}")
     except Exception as e:
       cloudlog.exception(f"Unexpected error fetching models: {e}")
 
     return None
 
   def get_available_bundles(self) -> list[custom.ModelManagerSP.ModelBundle]:
-    """Gets the list of available models, with smart cache handling"""
+    """Gets the list of available models, with smart cache handling
+    合并官方模型和本地自定义模型
+    """
+    all_bundles = []
+
+    # 1. 获取官方模型
     cached_data, is_expired = self.model_cache.get()
 
     if cached_data and not is_expired:
-      cloudlog.debug("Using valid cached models data")
-      return self.model_parser.parse_models(cached_data)
+      all_bundles = self.model_parser.parse_models(cached_data)
+    else:
+      fetched_bundles = self._fetch_and_cache_models()
+      if fetched_bundles is not None:
+        all_bundles = fetched_bundles
+      elif cached_data:
+        all_bundles = self.model_parser.parse_models(cached_data)
 
-    fetched_bundles = self._fetch_and_cache_models()
-    if fetched_bundles is not None:
-      return fetched_bundles
+    # 2. 加载本地自定义模型并合并
+    if self.CUSTOM_JSON_PATH:
+      custom_bundles = self._load_local_json(self.CUSTOM_JSON_PATH)
+      if custom_bundles:
+        # 获取官方模型的 index 列表，避免重复
+        existing_indexes = {b.index for b in all_bundles}
+        for bundle in custom_bundles:
+          if bundle.index not in existing_indexes:
+            all_bundles.append(bundle)
+            cloudlog.info(f"已添加自定义模型: {bundle.displayName}")
 
-    if not cached_data:
-      cloudlog.warning("Failed to fetch fresh data and no cache available")
-
-    cloudlog.warning("Failed to fetch fresh data. Using expired cache as fallback")
-    return self.model_parser.parse_models(cached_data)
+    return all_bundles
 
 if __name__ == "__main__":
   params = Params()
   model_fetcher = ModelFetcher(params)
-  bundles = model_fetcher.get_available_bundles()
-  for bundle in bundles:
-    for model in bundle.models:
-      model_overrides = {override.key: override.value for override in bundle.overrides}
-      # Print model details
-      print(f"Bundle: {bundle.internalName}, Type: {model.type}, Status: {bundle.status}, Overrides: {model_overrides}")
-      # Print artifact details
-      print(f"Artifact: {model.artifact.fileName}, Download URI: {model.artifact.downloadUri.uri}")
-      # Print metadata details
-      print(f"Metadata: {model.metadata.fileName}, Download URI: {model.metadata.downloadUri.uri}")
+  model_fetcher.get_available_bundles()

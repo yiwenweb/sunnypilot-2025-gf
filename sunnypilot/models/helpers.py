@@ -19,12 +19,15 @@ from openpilot.system.hardware.hw import Paths
 from pathlib import Path
 
 # see the README.md for more details on the model selector versioning
-CURRENT_SELECTOR_VERSION = 10
-REQUIRED_MIN_SELECTOR_VERSION = 9
+CURRENT_SELECTOR_VERSION = 15
+REQUIRED_MIN_SELECTOR_VERSION = 14
 
 USE_ONNX = os.getenv('USE_ONNX', PC)
 
+# 自定义模型目录路径 (用于 Model Manager 下载的模型)
 CUSTOM_MODEL_PATH = Paths.model_root()
+# 本地自编译模型目录路径
+CUSTOMER_MODEL_PATH = Path(__file__).parent / 'customer'
 METADATA_PATH = Path(__file__).parent / '../models/supercombo_metadata.pkl'
 
 ModelManager = custom.ModelManagerSP
@@ -127,6 +130,11 @@ def get_model_path():
     return {ModelRunner.ONNX: Path(__file__).parent / '../models/supercombo.onnx'}
 
   if model := _get_model():
+    # 优先从 customer 目录读取自编译模型
+    customer_path = CUSTOMER_MODEL_PATH / model.artifact.fileName
+    if customer_path.exists():
+      return {ModelRunner.THNEED: str(customer_path)}
+    # 否则从 Model Manager 下载目录读取
     return {ModelRunner.THNEED: f"{CUSTOM_MODEL_PATH}/{model.artifact.fileName}"}
 
   return {ModelRunner.THNEED: Path(__file__).parent / '../models/supercombo.thneed'}
@@ -136,7 +144,12 @@ def load_metadata():
   metadata_path = METADATA_PATH
 
   if model := _get_model():
-    metadata_path = f"{CUSTOM_MODEL_PATH}/{model.metadata.fileName}"
+    # 优先从 customer 目录读取 metadata
+    customer_metadata_path = CUSTOMER_MODEL_PATH / model.metadata.fileName
+    if customer_metadata_path.exists():
+      metadata_path = customer_metadata_path
+    else:
+      metadata_path = f"{CUSTOM_MODEL_PATH}/{model.metadata.fileName}"
 
   with open(metadata_path, 'rb') as f:
     return pickle.load(f)

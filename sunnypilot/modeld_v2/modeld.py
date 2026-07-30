@@ -45,6 +45,7 @@ class ModelState(ModelStateBase):
   inputs: dict[str, np.ndarray]
   prev_desire: np.ndarray  # for tracking the rising edge of the pulse
   temporal_idxs: slice | np.ndarray
+  PLANPLUS_CONTROL: float = 1.0  # planplus 对横向曲率的影响权重，默认 1.0（100%）
 
   def __init__(self, context: CLContext):
     ModelStateBase.__init__(self)
@@ -160,7 +161,13 @@ class ModelState(ModelStateBase):
                                                      action_t=long_action_t)
     desired_accel = smooth_value(desired_accel, prev_action.desiredAcceleration, self.LONG_SMOOTH_SECONDS)
 
-    desired_curvature = get_curvature_from_output(model_output, v_ego, lat_action_t, self.mlsim)
+    # 计算曲率用的 plan，支持 PLANPLUS_CONTROL 权重调节
+    if 'planplus' in model_output and self.PLANPLUS_CONTROL != 1.0:
+      curvature_plan = plan + (self.PLANPLUS_CONTROL - 1.0) * model_output['planplus'][0]
+    else:
+      curvature_plan = plan
+
+    desired_curvature = get_curvature_from_output(model_output, curvature_plan, v_ego, lat_action_t, self.mlsim)
     if self.generation is not None and self.generation >= 10: # smooth curvature for post FOF models
       if v_ego > self.MIN_LAT_CONTROL_SPEED:
         desired_curvature = smooth_value(desired_curvature, prev_action.desiredCurvature, self.LAT_SMOOTH_SECONDS)
@@ -353,6 +360,13 @@ def main(demo=False):
       pm.send('cameraOdometry', posenet_send)
       pm.send('modelDataV2SP', mdv2sp_send)
     last_vipc_frame_id = meta_main.frame_id
+
+    # 每 60 帧读取一次 PlanplusControl 参数
+    if sm.frame % 60 == 0:
+      try:
+        model.PLANPLUS_CONTROL = float(params.get("PlanplusControl", return_default=True) or 1.0)
+      except Exception:
+        model.PLANPLUS_CONTROL = 1.0
 
 
 if __name__ == "__main__":

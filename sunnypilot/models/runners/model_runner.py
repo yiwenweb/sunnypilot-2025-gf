@@ -1,5 +1,6 @@
 import os
 from abc import abstractmethod, ABC
+from pathlib import Path
 
 import numpy as np
 from openpilot.sunnypilot.models.helpers import get_active_bundle
@@ -8,7 +9,37 @@ from openpilot.sunnypilot.models.runners.constants import NumpyDict, ShapeDict, 
 from openpilot.system.hardware.hw import Paths
 import pickle
 
+# 自定义模型目录路径 (用于 Model Manager 下载的模型)
 CUSTOM_MODEL_PATH = Paths.model_root()
+# 本地自编译模型目录路径 (优先级更高)
+CUSTOMER_MODEL_PATH = Path(__file__).parent.parent / 'customer'
+
+
+def get_model_file_path(filename: str) -> str:
+  """
+  获取模型文件路径，优先从 customer 目录加载。
+
+  查找顺序：
+  1. sunnypilot/models/customer/{filename} - 本地自编译模型
+  2. /data/media/0/models/{filename} - Model Manager 下载的模型
+
+  :param filename: 模型文件名
+  :return: 模型文件的完整路径
+  :raises FileNotFoundError: 如果两个目录都找不到文件
+  """
+  # 优先从 customer 目录加载
+  customer_path = CUSTOMER_MODEL_PATH / filename
+  if customer_path.exists():
+    return str(customer_path)
+
+  # 否则从 Model Manager 下载目录加载
+  custom_path = f"{CUSTOM_MODEL_PATH}/{filename}"
+  if os.path.exists(custom_path):
+    return custom_path
+
+  raise FileNotFoundError(f"模型文件未找到: {filename}\n"
+                          f"  已检查: {customer_path}\n"
+                          f"  已检查: {custom_path}")
 
 
 # Set QCOM environment variable for TICI devices, potentially enabling hardware acceleration
@@ -42,7 +73,7 @@ class ModelData:
 
   def _load_metadata(self) -> None:
     """Loads input shapes and output slices from the model's metadata pickle file."""
-    metadata_path = f"{CUSTOM_MODEL_PATH}/{self.metadata.fileName}"
+    metadata_path = get_model_file_path(self.metadata.fileName)
     with open(metadata_path, 'rb') as f:
       model_metadata = pickle.load(f)
     self.input_shapes = model_metadata.get('input_shapes', {})
