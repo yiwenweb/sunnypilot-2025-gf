@@ -6,6 +6,7 @@ See the LICENSE.md file in the root directory for more details.
 """
 from collections import deque
 import math
+import os
 import numpy as np
 
 from opendbc.car.lateral import FRICTION_THRESHOLD, get_friction
@@ -36,12 +37,17 @@ class NeuralNetworkLateralControl(LatControlTorqueExtBase):
     super().__init__(lac_torque, CP, CP_SP, CI)
     self.params = Params()
     self.enabled = self.params.get_bool("NeuralNetworkLateralControl")
-    self.has_nn_model = CP_SP.neuralNetworkLateralControl.model.path != MOCK_MODEL_PATH
+    model_path = CP_SP.neuralNetworkLateralControl.model.path
+    # Only treat as having a usable NN model when the path is non-empty, not the MOCK
+    # placeholder, and actually exists on disk. Cars without a trained NN torque model
+    # (e.g. BYD_TANG_DM) report an empty path; loading it would crash controlsd and,
+    # via the fallback chain, leave the EPS without a steering source (lockup).
+    self.has_nn_model = bool(model_path) and model_path != MOCK_MODEL_PATH and os.path.isfile(model_path)
 
     # NN model takes current v_ego, lateral_accel, lat accel/jerk error, roll, and past/future/planned data
     # of lat accel and roll
     # Past value is computed using previous desired lat accel and observed roll
-    self.model = NNTorqueModel(CP_SP.neuralNetworkLateralControl.model.path)
+    self.model = NNTorqueModel(model_path) if self.has_nn_model else None
 
     self.pitch = FirstOrderFilter(0.0, 0.5, 0.01)
     self.pitch_last = 0.0
