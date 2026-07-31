@@ -180,11 +180,21 @@ class CarState(CarStateBase):
 
         # FIXED: removed lkas_isMainSwOn (944 momentary button) - use only persistent states from 813
         ret.cruiseState.available = lkas_config_isAccOn and lkas_hud_AccOn1
-        # enabled only when ACC truly engaged (3=ACC_ACTIVE, 5=FORCE_ACCEL).
-        # Excludes 1=standby: with pcmCruise, treating standby as enabled would fire
-        # pcmEnable (green/longitudinal) the moment ACC switch is pressed, skipping the
-        # blue lateral-only state. Lateral (MADS) uses cruiseState.available, not enabled.
-        ret.cruiseState.enabled = self.acc_state in (3, 5)
+        # enabled when ACC has actually taken longitudinal authority: 2=ACTIVATING(接管保持),
+        # 3=ACC_ACTIVE(接管加减速), 5=FORCE_ACCEL.
+        # ★★★ 20260731 对齐门总0.98实测(bus23完好日志逐帧解码): AccState=2 不是"1→3之间的短暂
+        #   瞬态", 而是【ACC已接管、保持速度】的稳定态 —— 门总接管期 state2 占39%(1154帧/23秒),
+        #   且 state2 时 814.AccControlActive=100%(ACC确已接管, 只是 AccelCmd 恒0 不加减速),
+        #   与 state3(AccControlActive=100%, accel 92%非零) 同属"真接管"。此前把 state2 排除,
+        #   使巡航中大量时间 OP 判未接管 -> 纵向断续; 且与 panda(byd.h controls_allowed 认1/2/3/5)
+        #   错配: OP在state2掉出enabled而panda仍allowed, AccState在2↔3跳变时enabled反复通断,
+        #   叠加 selfdrived mismatch_counter -> controlsMismatch -> 横纵向一起IMMEDIATE_DISABLE。
+        # 【为何仍排除 1=STANDBY】: state1 是真待机(ACC开关已开但未接管, AccControlActive=0),
+        #   若纳入 enabled 会在按ACC键瞬间即触发 pcmEnable(绿灯/纵向), 跳过蓝色纯横向态。
+        #   纯横向(MADS)走 cruiseState.available, 不依赖 enabled。
+        # 【安全】enabled={2,3,5} ⊆ panda允许集{1,2,3,5}, 恒不出现"OP已enabled但panda未allowed",
+        #   从源头杜绝正向 controlsMismatch。
+        ret.cruiseState.enabled = self.acc_state in (2, 3, 5)
         ret.cruiseState.standstill = ret.standstill
         ret.cruiseState.speed = cp_cam.vl["ACC_HUD_ADAS"]["SetSpeed"] * CV.KPH_TO_MS
 
@@ -196,7 +206,8 @@ class CarState(CarStateBase):
         # (取证: 正常退出时掉线都发生在 ACC 已退出/停车, op 侧先松手; 而"过弯中 EPS 强行切断"
         #  会在 ACC 仍激活时把 Cru 拉低, 即本判据)。触发后保持 ~1s(50帧) 让报警可感知,
         # Cru 恢复或 ACC 退出即结束。用 steerFaultTemporary, openpilot 会自动出声光警告。
-        acc_engaged = self.acc_state in (3, 5)
+        # 与 cruiseState.enabled 一致: state2 也是接管态 (门总实测, 见上)
+        acc_engaged = self.acc_state in (2, 3, 5)
         eps_cut = (self.eps_cruise_activated_last and not self.eps_cruise_activated and acc_engaged)
         if eps_cut:
             self.eps_cut_alert_frames = 50
