@@ -152,19 +152,8 @@ static bool byd_tx_hook(const CANPacket_t *msg) {
     if (steer_torque_cmd_checks(lkas_output, steer_req, BYD_STEERING_LIMITS)) {
       tx = false;
     }
-    // Mark OP steering active ONLY when OP actually requests steering (steer_req=1).
-    // 【根因修复 (EPS 开机即锁死)】: 之前"只要发790就标记active"有致命缺陷 —— OP 未激活时
-    //   (controls_allowed=False/latActive=False) carcontroller 仍以 50Hz 发 790 空命令
-    //   (steer_req=0, output=0)。实测: 未激活状态 sendcan 790=50Hz 全是 steer_req=0。
-    //   这使 byd_op_steering_active 永远为 true(每20ms刷新, 100ms 超时永不触发) ->
-    //   fwd_hook 永久拦截摄像头原厂 790 -> 但 OP 发的是空命令(steer_req=0 无有效转向) ->
-    //   EPS 既收不到摄像头 790 也收不到 OP 有效转向 -> 握手后约1s判命令流丢失 -> TorqueFailed
-    //   锁死。fail-safe(OP沉默才放行摄像头)因"OP从不真正沉默"而失效。
-    // 【修复】: 用 steer_req 作门控 —— OP 真正接管时 steer_req=1(即使扭矩被 rate/torque limiter
-    //   限到0, steer_req 仍为1, 不受拒帧影响), 才标记 active 去拦摄像头790(EPS只听OP);
-    //   未激活时 steer_req=0 -> 不标记 -> fwd_hook 放行摄像头原厂790 -> EPS 始终有合法转向源
-    //   -> 永不断供锁死。这才是 relay fail-safe 的正确实现。
-    if (steer_req) {
+    // Mark OP steering active (aligned with 门总 0.98: only when torque-check passes)
+    if (tx) {
       byd_op_steering_active = true;
       byd_op_steering_ts = microsecond_timer_get();
     }
@@ -225,7 +214,7 @@ static bool byd_fwd_hook(int bus_num, int addr) {
   // 连续 counter 报文组, 避免双源 counter 冲突导致车机 ACC 报错。OP 停发 100ms 超时后自动恢复
   // 全透传 (byd_op_acc_active 超时清零), 保证异常/退出时原厂 ACC/AEB 立即接管。
   if (bus_num == 2) {
-    if ((addr == BYD_ACC_MPC_STATE) && byd_op_steering_active) {
+    if (addr == BYD_ACC_MPC_STATE) {
       return true;
     }
     if (byd_op_acc_active && ((addr == BYD_ACC_CMD) || (addr == BYD_ACC_HUD_ADAS) || (addr == BYD_ACC_AEB))) {
