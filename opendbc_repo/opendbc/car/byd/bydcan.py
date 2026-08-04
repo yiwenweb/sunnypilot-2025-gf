@@ -102,7 +102,7 @@ def acc_cmd(packer, CP, cam_msg: dict, mrr_leaddist, accel, rfss, sss, longActiv
     jerk_base_upper = np.interp(mrr_leaddist, CarControllerParams.K_jerk_xp, CarControllerParams.K_jerk_base_upper_fp)
     jerk_base_lower = np.interp(mrr_leaddist, CarControllerParams.K_jerk_xp, CarControllerParams.K_jerk_base_lower_fp)
 
-    if (accel < 0):
+    if accel < 0:
         jerk_upper = jerk_base_upper
         jerk_lower = jerk_base_lower + accel * CarControllerParams.K_accel_jerk_lower
     else:
@@ -114,12 +114,15 @@ def acc_cmd(packer, CP, cam_msg: dict, mrr_leaddist, accel, rfss, sss, longActiv
     if longActive:
         values.update({
             "AccelCmd": accel,
-            "ComfortBandUpper": 0,  # 物理值 0 对应的 raw 是 100 (0x64), 从闭源版抓包获得
-            "ComfortBandLower": 0,  # 物理值 0 对应的 raw 是 100 (0x64)
+            "ComfortBandUpper": 0,  # raw 100; 门总实证恒0 (99.4%), 与我方一致
+            "ComfortBandLower": 0,  # raw 100; 门总实证恒0 (99.4%)
             "JerkUpperLimit": jerk_upper,
             "JerkLowerLimit": jerk_lower,
             "ResumeFromStandstill": rfss,
             "StandstillState": sss,
+            # 20260804 门总实证: AccControlActive 在 AccState=3 时恒=1(100%帧),
+            # 明确告知 ESP "ACC 控制激活"。我方过去透传摄像头值(可能=0)。
+            "AccControlActive": 1,
         })
 
     data = packer.make_can_msg("ACC_CMD", CanBus.ESC, values)[1]
