@@ -1,6 +1,7 @@
 #include "selfdrive/ui/qt/onroad/driver_monitoring.h"
 #include <algorithm>
 #include <cmath>
+#include <QRadialGradient>
 
 #include "selfdrive/ui/qt/onroad/buttons.h"
 #include "selfdrive/ui/qt/util.h"
@@ -26,6 +27,10 @@ DriverMonitorRenderer::DriverMonitorRenderer() : face_kpts_draw(std::size(DEFAUL
 
 void DriverMonitorRenderer::updateState(const UIState &s) {
   auto &sm = *(s.sm);
+  const auto car_state = sm["carState"].getCarState();
+  prepared_active = car_state.getLkasPrepared();
+  prepared_frames = car_state.getLkasPreparedFrames();
+
   is_visible = sm["selfdriveState"].getSelfdriveState().getAlertSize() == cereal::SelfdriveState::AlertSize::NONE &&
                sm.rcv_frame("driverStateV2") > s.scene.started_frame;
   if (!is_visible) return;
@@ -79,6 +84,28 @@ void DriverMonitorRenderer::draw(QPainter &painter, const QRect &surface_rect) {
 #endif
 
   drawIcon(painter, QPoint(x, y), dm_img, QColor(0, 0, 0, 70), opacity);
+
+  if (prepared_frames > 0) {
+    const float prepared_x = x + (is_rhd ? -btn_size : btn_size);
+    const QPointF prepared_center(prepared_x, y);
+    const QColor center_color = prepared_active ? QColor(190, 0, 0, 128) : QColor(0, 150, 35, 128);
+    const QColor edge_color = prepared_active ? QColor(255, 95, 95, 55) : QColor(90, 255, 130, 55);
+
+    QRadialGradient gradient(prepared_center, btn_size / 2.0);
+    gradient.setColorAt(0.0, center_color);
+    gradient.setColorAt(1.0, edge_color);
+    painter.setPen(QPen(QColor(255, 255, 255, 100), 4));
+    painter.setBrush(gradient);
+    painter.drawEllipse(prepared_center, btn_size / 2.0, btn_size / 2.0);
+
+    painter.setPen(QColor(255, 255, 255, 235));
+    QFont font = painter.font();
+    font.setPixelSize(72);
+    font.setWeight(QFont::DemiBold);
+    painter.setFont(font);
+    painter.drawText(QRectF(prepared_x - btn_size / 2.0, y - btn_size / 2.0, btn_size, btn_size),
+                     Qt::AlignCenter, QString::number(prepared_frames));
+  }
 
   QPointF keypoints[std::size(DEFAULT_FACE_KPTS_3D)];
   for (int i = 0; i < std::size(keypoints); ++i) {

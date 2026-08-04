@@ -18,6 +18,8 @@ private:
   bool is_visible = false;
   bool is_active = false;
   bool is_rhd = false;
+  bool prepared_active = false;
+  uint16_t prepared_frames = 0;
   float dm_fade_state = 1.0;
   QPixmap dm_img;
   std::vector<vec3> face_kpts_draw;

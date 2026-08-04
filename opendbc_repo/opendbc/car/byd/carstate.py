@@ -1,4 +1,6 @@
 import copy
+import os
+import time
 import numpy as np
 
 from opendbc.can import CANDefine, CANParser
@@ -8,7 +10,6 @@ from opendbc.car import Bus, create_button_events, structs
 from opendbc.car.interfaces import CarStateBase
 from opendbc.car.byd.values import DBC, CanBus, LKASConfig, CarControllerParams
 
-import os
 BYD_RADAR = os.getenv("BYD_RADAR") is not None
 
 ButtonType = structs.CarState.ButtonEvent.Type
@@ -37,6 +38,10 @@ class CarState(CarStateBase):
         self.lkas_allowed_speed = False
 
         self.lkas_prepared = False
+        self.lkas_prepared_last = False
+        self.lkas_prepared_frames = 0
+        self.lkas_prepared_clear_time = 0.0
+        self.eps_state_counter_last = None
         self.eps_cruise_activated = False
         # 机制①: EPS 单方面切断横向控制的检测/报警状态
         self.eps_cruise_activated_last = False
@@ -149,6 +154,21 @@ class CarState(CarStateBase):
         self.eps_warning = bool(cp.vl["ACC_EPS_STATE"]["SteerWarning"])
         self.eps_state_counter = int(cp.vl["ACC_EPS_STATE"]["Counter"])
 
+        # Count each real 50 Hz EPS frame once. CarState updates at 100 Hz, so counting
+        # update() calls would double the displayed Prepared duration.
+        if self.eps_state_counter_last is None or self.eps_state_counter != self.eps_state_counter_last:
+            self.eps_state_counter_last = self.eps_state_counter
+            if self.lkas_prepared:
+                self.lkas_prepared_frames = 1 if not self.lkas_prepared_last else min(self.lkas_prepared_frames + 1, 65535)
+                self.lkas_prepared_clear_time = 0.0
+            elif self.lkas_prepared_last:
+                self.lkas_prepared_clear_time = time.monotonic() + 10.0
+            self.lkas_prepared_last = self.lkas_prepared
+
+        if not self.lkas_prepared and self.lkas_prepared_clear_time and time.monotonic() >= self.lkas_prepared_clear_time:
+            self.lkas_prepared_frames = 0
+            self.lkas_prepared_clear_time = 0.0
+
         # 驾驶员接管判定阈值 (steeringPressed)。
         # 单位: steeringTorque = 318.SteerDriverTorque 原始CAN计数 (12-bit signed, scale=1), 非Nm。
         # 实测: 车停/脱手静态噪声峰值 ±57、均值14.5; 59 是上游默认值, 实测 0% 误触发。
@@ -164,6 +184,7 @@ class CarState(CarStateBase):
         ret.steeringPressed = self.update_steering_pressed(abs(ret.steeringTorque) > 59, 5)
 
         ret.lkasPrepared = bool(self.lkas_prepared)
+        ret.lkasPreparedFrames = self.lkas_prepared_frames
 
         ret.parkingBrake = (cp.vl["EPB"]["EPB_ActiveFlag"] == 1)
 

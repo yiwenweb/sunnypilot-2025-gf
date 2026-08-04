@@ -205,6 +205,7 @@ struct CarState {
   vehicleSensorsInvalid @52 :Bool;  # invalid steering angle readings, etc.
   lowSpeedAlert @56 :Bool;  # lost steering control due to a dynamic min steering speed
   lkasPrepared @61 :Bool;   # EPS ready for external steering control (BYD LKAS_Prepared)
+  lkasPreparedFrames @62 :UInt16;  # consecutive real 50 Hz EPS Prepared frames; retained briefly after falling edge
   blockPcmEnable @60 :Bool;  # whether to allow PCM to enable this frame
 
   # cruise state
