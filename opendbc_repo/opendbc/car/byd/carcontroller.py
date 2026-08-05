@@ -290,23 +290,17 @@ class CarController(CarControllerBase):
           # v6: SOFT保留(前4次自愈, 不断续); 但Prepared持续超FULL_EXIT(16帧, >13<25)时判定司机【持续
           #   override】-> Act=0完全松手 -> EPS释放不锁死(门总遇持续对抗也是Act=0松手, Prepared max仅6帧)。
           #   退给司机是override本该做的。full-exit后进cooldown(纯递减必到0, 不用会死锁的eps_exit_wait)。
-          # LOCK3 v8 (20260804): 门总式复刻 —— 第1帧收力 + 全程保持Active + 无冷却 + 双层红线兜底。
-          # 【v8 相比 v7.2 的改动与依据】(见 values.py LOCK3 v8 注释):
-          #   ① PREP_HOLD 2->1: P=1【第1帧】即收Out(门总实证收力延迟中位0帧), 收力越早越顺越安全。
-          #   ② 【不再第3帧撤Active】: v7.2的"P=1≥3帧撤Active"是弯道"第3帧突然发空"抖动的主因
-          #      (撤Active=OP放弃控制主权->EPS助力瞬失)。门总从不因P=1撤Active, 只收Out保持Active,
-          #      让EPS的MainTorque惯性衰减(77->60->34->17->0)柔性淡出。故收Out期间【保持Active=1】。
-          #   ③ 双层红线兜底(仅防持续死掰的乙场景, 正常P=1 max12帧够不到):
-          #      - FULL_EXIT=13: P=1连续>=13帧撤Active+清req_prepare(尽力逼EPS回0xF8重置计数器);
-          #      - HARD_EXIT=20: P=1连续>=20帧无条件完全退出(硬保命), 离25红线留5帧, 宁退不锁。
-          #   ④ EXIT_COOLDOWN=0: 无冷却, P=1解除立即恢复(门总无冷却; v7.2的3帧冷却是控制真空抖动次因)。
-          # 【收力方式】用 SOFT_COLLAPSE_RATE(54, 门总收力中位)快速把Out往0收, 不走
-          #   apply_driver_steer_torque_limits(受DELTA_DOWN=18限, 收力慢)。收力快=更快让步=更安全。
-          # 【不清零 softstart_limit】保证P=1解除后按rate limit快速恢复(不从0慢爬), 对齐门总Out直接跳回。
+          # LOCK3 v7: SOFT-only (对齐门总 seg16/18/19 原始数据)。
+          # 门总遇P=1: 按速率收Out到0(让EPS满意) + 保持Active=1(不撤) -> P=1约9帧内落回 -> 直接恢复出力。
+          # 关键: 【不清零 softstart_limit】。v6曾每帧 softstart=0, 导致P=1解除后Out从0慢爬(18帧才到顶),
+          #   而门总是Out直接跳回46-69(不softstart)。保留softstart_limit不动, 让恢复靠rate limit快速回,
+          #   不额外拖慢。full-exit已在values禁用(FULL_EXIT=9999), 此处保留判断但永不触发。
           if CarControllerParams.LOCK3_ENABLE:
             lock3_soft = self.eps_prepared_hold >= CarControllerParams.LOCK3_PREP_HOLD_FRAMES
             if lock3_soft:
-              # 第1帧起即收Out到0(向0靠拢不越过0), 保持Active不撤(门总式)
+              # 收力: 用 SOFT_COLLAPSE_RATE(54, 对齐门总收力速率) 快速把Out往0收, 保持Act=1。
+              # 不走 apply_driver_steer_torque_limits(受DELTA_DOWN=18限, 收力慢); 收力快=更快让步=更安全。
+              # 保持符号朝0收: last>0则-rate但不越过0, last<0则+rate但不越过0。
               rate = CarControllerParams.LOCK3_SOFT_COLLAPSE_RATE
               last = self.apply_torque_last
               if last > 0:
@@ -318,26 +312,14 @@ class CarController(CarControllerBase):
               # 不动 softstart_limit, 保证P=1解除后按rate limit快速恢复(不从0慢爬)
               self.steerRateLimActive = False
               self.steerRateLim = 1.0
-
-              # 红线兜底第一层 FULL_EXIT=13: 持续对抗到13帧仍不落回 -> 撤Active+清req_prepare,
-              # 尽力逼EPS回0xF8重置P=1计数器。门总正常P=1(max12帧)够不到此, 只兜"持续死掰"(乙场景)。
-              # ⚠️pcmCruise=True下撤Active未必能让Cru落0/318到0xF8(见values风险注释), 故有下面硬保命层。
+              # full-exit(v7.1): Prepared持续>=FULL_EXIT_FRAMES(12) -> 撤Active松手, 让EPS释放,
+              # 防止 Prepared 持续25帧后 EPS 硬超时 TorqueFailed(00000068/69两次锁死实证)。
+              # 收力(SOFT)扛不住持续对抗(你不停手Prepared不落回), 必须在25帧超时前撤Active。
               if self.eps_prepared_hold >= CarControllerParams.LOCK3_FULL_EXIT_FRAMES:
                 self.lkas_active = 0
                 self.lkas_req_prepare = 0
                 self.lock3_exit_cooldown = CarControllerParams.LOCK3_EXIT_COOLDOWN
-                print("LOCK3 v8 FULL-EXIT prep_hold=%d drvTq=%d -> Act=0 (红线兜底)" % (
-                  self.eps_prepared_hold, int(CS.out.steeringTorque)))
-
-              # 红线兜底第二层 HARD_EXIT=20: 逼近25帧红线, 无条件完全退出(硬保命)。宁可退出接管
-              # 交回司机, 也绝不让P=1冲到25帧锁死(0xFC需断电重启)。留5帧余量。
-              if self.eps_prepared_hold >= CarControllerParams.LOCK3_HARD_EXIT_FRAMES:
-                self.lkas_active = 0
-                self.lkas_req_prepare = 0
-                self.steer_softstart_limit = 0
-                self.lock3_exit_cooldown = CarControllerParams.LOCK3_EXIT_COOLDOWN
-                apply_torque = 0
-                print("LOCK3 v8 HARD-EXIT prep_hold=%d drvTq=%d -> 完全退出(硬保命,防25帧锁死)" % (
+                print("LOCK3 FULL-EXIT prep_hold=%d drvTq=%d -> Act=0 松手" % (
                   self.eps_prepared_hold, int(CS.out.steeringTorque)))
 
         else:

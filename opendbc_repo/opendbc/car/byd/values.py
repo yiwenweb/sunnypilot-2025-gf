@@ -162,30 +162,24 @@ class CarControllerParams:
   # 【v7修正】: 保留SOFT(收Out到0, 对齐门总, 让EPS满意), 【彻底禁用full-exit】(FULL_EXIT=9999永不触发,
   #   Active全程保持, 靠收Out解除P=1而非撤Active)。allowance=300已让OP不塌, SOFT收Out后EPS会像门总
   #   一样几帧内放回P=1, 不锁死(门总实证tqf=0)。这才是门总真实做法(既非v6撤Active, 也非"完全不理P=1")。
-  # --- LOCK3 v8 (20260804, 门总式复刻: 第1帧收力 + 全程保持Active + 无冷却 + 红线兜底) ---
-  # 【为何从 v7.2 改到 v8】4段锁死样本 src 归属修正 + 300段全盘扫描裁决:
-  #   ① 真实锁死只有两类: (a)崩溃型(9a/9b: 无src=128/safety=elm327/controlsd崩, 已由第9章tici补丁修)
-  #      (b)Config=1老代码型(2b, 07-15录, 早于07-18改Config=3, 已修)。
-  #   ② Config=3 + Active=1 接管态下, 全盘300段【0次】P=1与接管共现 -> Config=3让EPS信任, 接管中
-  #      基本不发P=1(复刻门总: 门总Cru=1的8314帧Prepared=0次)。
-  #   ③ 故 v7.2"P=1≥3帧撤Active"在正常行驶几乎不触发保护, 却在偶发P=1脉冲时撤Active+冷却 ->
-  #      EPS瞬间失控制主权 -> 方向盘"第3帧突然发空"抖动。这【多做的撤Active】才是抖动主因, 门总从不因P=1撤Active。
-  # 【v8 = 门总真实做法】: 第1帧即收Out到0(54/帧) + 【全程保持Active不撤】 + 【无冷却】;
-  #   仅保留"红线兜底"(FULL_EXIT=13)与"硬保命"(HARD_EXIT=20)两层, 防持续死掰(乙场景)冲25帧红线。
-  # 【锁死红线铁证(假设X, 4段交叉验证)】: EPS TorqueFailed计数器【只由P=1连续帧数驱动】,
-  #   与lko/MainTorque无关; P=1连续≥25-26帧(500ms)必锁死。收力到0、MainTq归零都【不能】阻止。
-  #   计数器仅在318掉到0xF8(P=0且Cru=0)才重置。
-  # 【⚠️未验证风险(实车须验)】: pcmCruise=True下撤Active只清OP的LKAS_Active位, Cru由原车ACC控制、
-  #   OP逼不动 -> 撤Active未必能让318掉到0xF8重置计数器。若司机持续死掰(乙场景)且撤Active无效,
-  #   兜底可能失效仍会锁死。但300段0共现强烈倾向甲场景(Config=3下持续P=1几乎不发生), 实车大概率安全。
-  #   故保留FULL_EXIT=13(离红线留12帧余量)+HARD_EXIT=20(硬保命, 宁退不锁)双层兜底。
-  LOCK3_ENABLE = True          # v8: 开启门总式(第1帧收力+保持Active+无冷却+双层红线兜底)
-  LOCK3_PREP_HOLD_FRAMES = 1   # v8: P=1【第1帧】即收力(对齐门总, 收力越早越安全越顺)。v7.2曾用2(慢1帧)
-  # 【v8: FULL_EXIT 从 v7.2 的 3 改到 13】不再第3帧撤Active(那是抖动主因)。门总P=1 max=12帧,
-  #   正常短脉冲帧6前就落回, 13帧不会误触发(不抖); 且离25红线留12帧余量。仅持续死掰(乙)才可能到13。
-  LOCK3_FULL_EXIT_FRAMES = 13   # v8: P=1连续>=13帧才撤Active(红线兜底), 门总正常P=1够不到, 只兜持续对抗
-  LOCK3_HARD_EXIT_FRAMES = 20   # v8新增: P=1连续>=20帧 -> 无条件完全退出(硬保命), 离25红线留5帧, 宁退不锁
-  LOCK3_EXIT_COOLDOWN = 0      # v8: 无冷却(对齐门总"P=1解除立即恢复")。v7.2的3帧冷却是抖动次因(控制真空)
+  LOCK3_ENABLE = True          # v7: 开启, 做SOFT收Out(对齐门总), 但下面FULL_EXIT禁用
+  LOCK3_PREP_HOLD_FRAMES = 2   # Prepared连续>=此帧才触发SOFT收力(去抖, 滤1帧噪声)。v6->v7改动时曾漏定义
+                               # 导致 carcontroller AttributeError 崩溃(controlsd反复崩->safety回落19/一堆报错)
+  # v7.2(门总18段逐帧实证, 复刻门总"每步极短时间完成"的反射循环):
+  # 【门总真实机制(00000006 seg18逐帧, 用真实时间ms不受丢帧影响)】:
+  #   1. Prep=1 -> 立即收扭矩(54/帧), ~28ms到0 (不等待);
+  #   2. 扭矩到0稳1-2帧 -> 撤Active (Prep出现后~60ms=3帧);
+  #   3. 撤Active -> Prep立即落回0 (~20ms=1帧, 撤Active是解除Prep的直接手段);
+  #   4. 条件满足 -> 立即主动重新举Active握手 (撤后~60-80ms), 不被动等;
+  #   5. 若司机还在掰 -> 回到步骤1再来一轮 (快速循环~8帧/160ms); 司机停手 -> 恢复正常出力。
+  # 【关键】全程"不等待、每步最短时间完成"。之前锁死(00000068/69, Prep持续25帧->EPS超时)是因为
+  #   v7保持Active不撤; 之前一卡一卡(v6)是因为cooldown=10太长, 违背门总"立即重握手"。
+  # 【阈值3】: 门总Prep出现后~3帧(60ms)撤Active。远小于EPS超时25帧, 稳防锁死; 配合下面cooldown=3
+  #   立即重握手, 复刻门总快速循环(不是死等, 不是长cooldown拖慢)。
+  LOCK3_FULL_EXIT_FRAMES = 3    # Prep持续>=3帧(~60ms)撤Active, 门总实测(收0后稳1-2帧即撤)
+  LOCK3_EXIT_COOLDOWN = 3      # v7.2: 撤Active后仅冷却3帧(~60ms)即重新握手, 复刻门总"立即重握手"。
+                               # 旧值10(0.2s)太长->撤后久不接管->一卡一卡(v6卡顿主因)。门总撤后~60-80ms
+                               # 就重新Active, 故用3(纯递减必归0, 不会死锁)。
   # LOCK3_SOFT_COLLAPSE_RATE: SOFT收力(P=1时把Out收到0)的每帧下降速率, 【只用于SOFT收力】,
   # 正常行驶下降仍受 STEER_DELTA_DOWN=18 限制。
   # 【门总23段全量实证】: 门总遇P=1需收力时, 单帧下降能到 54~77(中位54), 2帧从64收到0;
