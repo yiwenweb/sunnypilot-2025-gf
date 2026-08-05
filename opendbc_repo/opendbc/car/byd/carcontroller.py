@@ -40,8 +40,11 @@ class CarController(CarControllerBase):
     self.release_counter = 0
 
     # LOCK3 v6: EPS 请求重握手/退出 (Prepared) 软响应 + 持续超时 full-exit (对齐门总)
-    self.eps_prepared_hold = 0     # Prepared 连续=1 的帧数: 达 PREP_HOLD 收扭矩, 达 FULL_EXIT 松手退出
-    self.lock3_exit_cooldown = 0   # full-exit 后的冷却帧数 (纯递减必到0, 不用会死锁的 eps_exit_wait)
+    self.eps_prepared_hold = 0     # Prepared 连续=1 的帧数 (v7.2遗留, v9 active分支不再依赖)
+    self.lock3_exit_cooldown = 0   # [v7.2遗留, v9 已不用] full-exit 后的冷却帧数
+    # LOCK3 v9 (000000b3逐帧逆向): 执行中处于 0xFB(P=1+Cru=1死胡同) 的连续帧数,
+    # 超 LOCK3_DEADEND_RELEASE_FRAMES 则放 Act=0 走干净重握手 (复刻seg7成功路径, 见第十一章)
+    self.eps_deadend_hold = 0
 
     # LOCK4: 退出收尾时等 EPS 电机(MainTorque)卸载再松手, 防司机对抗导致 MainTq 滞后锁死
     self.exit_dwell = 0
@@ -295,32 +298,38 @@ class CarController(CarControllerBase):
           # 关键: 【不清零 softstart_limit】。v6曾每帧 softstart=0, 导致P=1解除后Out从0慢爬(18帧才到顶),
           #   而门总是Out直接跳回46-69(不softstart)。保留softstart_limit不动, 让恢复靠rate limit快速回,
           #   不额外拖慢。full-exit已在values禁用(FULL_EXIT=9999), 此处保留判断但永不触发。
-          if CarControllerParams.LOCK3_ENABLE:
-            lock3_soft = self.eps_prepared_hold >= CarControllerParams.LOCK3_PREP_HOLD_FRAMES
-            if lock3_soft:
-              # 收力: 用 SOFT_COLLAPSE_RATE(54, 对齐门总收力速率) 快速把Out往0收, 保持Act=1。
-              # 不走 apply_driver_steer_torque_limits(受DELTA_DOWN=18限, 收力慢); 收力快=更快让步=更安全。
-              # 保持符号朝0收: last>0则-rate但不越过0, last<0则+rate但不越过0。
-              rate = CarControllerParams.LOCK3_SOFT_COLLAPSE_RATE
-              last = self.apply_torque_last
-              if last > 0:
-                apply_torque = max(0, last - rate)
-              elif last < 0:
-                apply_torque = min(0, last + rate)
-              else:
-                apply_torque = 0
-              # 不动 softstart_limit, 保证P=1解除后按rate limit快速恢复(不从0慢爬)
-              self.steerRateLimActive = False
-              self.steerRateLim = 1.0
-              # full-exit(v7.1): Prepared持续>=FULL_EXIT_FRAMES(12) -> 撤Active松手, 让EPS释放,
-              # 防止 Prepared 持续25帧后 EPS 硬超时 TorqueFailed(00000068/69两次锁死实证)。
-              # 收力(SOFT)扛不住持续对抗(你不停手Prepared不落回), 必须在25帧超时前撤Active。
-              if self.eps_prepared_hold >= CarControllerParams.LOCK3_FULL_EXIT_FRAMES:
+          # LOCK3 v9 (000000b3逐帧逆向, 第十一章): 执行中(0xFA)遇 P=1 的处理。
+          # 关键区分 318 两种 P=1:
+          #   0xF9 (P=1, Cru=0)  = 健康的准备态, EPS会自己走向0xFA执行, 【不放手】(收力等它);
+          #   0xFB (P=1, Cru=1)  = 死胡同, EPS不会自己走到0xFA, 【收力这么多帧仍不脱离 -> 放Act=0】
+          #                        让EPS掉回0xF8, 下次从Cru=0干净两段握手重进(复刻seg7成功路径)。
+          # 门总执行中P=1中位3帧、max6帧自落回; 我们超6帧判死胡同放手, 远小于25帧锁死红线。
+          if CarControllerParams.LOCK3_ENABLE and CS.lkas_prepared:
+            # 收力: SOFT_COLLAPSE_RATE(54, 对齐门总) 快速把Out往0收, 期间保持Act=1等EPS自愈。
+            rate = CarControllerParams.LOCK3_SOFT_COLLAPSE_RATE
+            last = self.apply_torque_last
+            if last > 0:
+              apply_torque = max(0, last - rate)
+            elif last < 0:
+              apply_torque = min(0, last + rate)
+            else:
+              apply_torque = 0
+            self.steerRateLimActive = False
+            self.steerRateLim = 1.0
+            # 仅 0xFB (P=1 且 Cru=1 死胡同) 才累计并在超时后放手; 0xF9(Cru=0健康准备态)不累计不放手。
+            if CS.eps_cruise_activated:
+              self.eps_deadend_hold += 1
+              if self.eps_deadend_hold >= CarControllerParams.LOCK3_DEADEND_RELEASE_FRAMES:
                 self.lkas_active = 0
                 self.lkas_req_prepare = 0
-                self.lock3_exit_cooldown = CarControllerParams.LOCK3_EXIT_COOLDOWN
-                print("LOCK3 FULL-EXIT prep_hold=%d drvTq=%d -> Act=0 松手" % (
-                  self.eps_prepared_hold, int(CS.out.steeringTorque)))
+                self.steer_softstart_limit = 0
+                self.eps_deadend_hold = 0
+                print("LOCK3 v9 DEADEND-RELEASE 0xFB held drvTq=%d -> Act=0 干净重握手" % (
+                  int(CS.out.steeringTorque)))
+            else:
+              self.eps_deadend_hold = 0
+          else:
+            self.eps_deadend_hold = 0
 
         else:
           # 握手逻辑 (对齐门总, 笔记12/19章验证): 见 EPS Prepared=1 即切 Act=1, 从0软起(每帧+16),
@@ -331,20 +340,38 @@ class CarController(CarControllerBase):
           # 门总握手不依赖此等待, 见 Prepared=1 直接接管。
           # LOCK3 v6 冷却: full-exit 松手后, 先冷却几帧不重新接管, 给 EPS/司机稳定
           # (纯递减计数, 必然归0, 不会像 eps_exit_wait 那样永久卡死)。
-          if self.lock3_exit_cooldown > 0:
-            self.lock3_exit_cooldown -= 1
-            self.lkas_active = 0
-            self.lkas_req_prepare = 0
-            self.steer_softstart_limit = 0
-            self.eps_prepared_hold = 0
-          elif CS.lkas_prepared:
+          # LOCK3 v9 握手状态机 (000000b3逐帧逆向, 第十一章): 以 318 的 P/Cru 双位决定动作,
+          # 复刻 seg7 成功路径(空闲Act=0 -> ReqP=1 -> 0xF9(P=1,Cru=0) -> Act=1 -> EPS抬Cru -> 0xFA执行)。
+          # 【核心修正】: 只在 0xF9(P=1 且 Cru=0) 干净准备态才置 Act=1;
+          #   绝不在 0xFB(P=1 且 Cru=1 死胡同) 挂 Act=1 (那正是seg4卡死的根因)。
+          if CS.lkas_prepared and not CS.eps_cruise_activated:
+            # 0xF9 干净准备态: EPS已就绪且Cru未抬起 -> 置Act=1, 走向0xFA执行 (seg7成功路径)
             self.lkas_active = 1.0
             self.steerRateLimActive = False
             self.steerRateLim = 1.0
             self.lkas_req_prepare = 0
             self.steer_softstart_limit = 0
+            self.eps_deadend_hold = 0
+          elif CS.lkas_prepared and CS.eps_cruise_activated:
+            # 0xFB 死胡同(P=1+Cru=1但我们未active): 绝不挂Act=1, 放手让EPS掉回0xF8, 下次干净重握手
+            self.lkas_active = 0
+            self.lkas_req_prepare = 0
+            self.steer_softstart_limit = 0
+            self.eps_deadend_hold = 0
+          elif CS.eps_cruise_activated:
+            # 0xFA 执行就绪态(P=0, Cru=1, EPS已授权执行): 直接置Act=1接管 (seg3实证: 从0xFA起Act=1
+            # 稳定执行; seg7实证Act=1@0xFA稳2279帧不翻0xFB)。此时Cru已授权, 无需再等Prepared握手。
+            self.lkas_active = 1.0
+            self.steerRateLimActive = False
+            self.steerRateLim = 1.0
+            self.lkas_req_prepare = 0
+            self.steer_softstart_limit = 0
+            self.eps_deadend_hold = 0
           else:
+            # 0xF8 空闲(P=0, Cru=0): 保持 Act=0 + 发 ReqPrepare=1 请求准备 (门总/seg7 空闲期均 Act=0)
+            self.lkas_active = 0
             self.lkas_req_prepare = 1
+            self.eps_deadend_hold = 0
 
 
 

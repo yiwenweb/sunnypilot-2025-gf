@@ -176,10 +176,18 @@ class CarControllerParams:
   #   v7保持Active不撤; 之前一卡一卡(v6)是因为cooldown=10太长, 违背门总"立即重握手"。
   # 【阈值3】: 门总Prep出现后~3帧(60ms)撤Active。远小于EPS超时25帧, 稳防锁死; 配合下面cooldown=3
   #   立即重握手, 复刻门总快速循环(不是死等, 不是长cooldown拖慢)。
-  LOCK3_FULL_EXIT_FRAMES = 3    # Prep持续>=3帧(~60ms)撤Active, 门总实测(收0后稳1-2帧即撤)
-  LOCK3_EXIT_COOLDOWN = 3      # v7.2: 撤Active后仅冷却3帧(~60ms)即重新握手, 复刻门总"立即重握手"。
-                               # 旧值10(0.2s)太长->撤后久不接管->一卡一卡(v6卡顿主因)。门总撤后~60-80ms
-                               # 就重新Active, 故用3(纯递减必归0, 不会死锁)。
+  LOCK3_FULL_EXIT_FRAMES = 3    # [v7.2遗留, v9已不用] Prep持续>=3帧撤Active
+  LOCK3_EXIT_COOLDOWN = 3      # [v7.2遗留, v9已不用] 撤Active后冷却帧数
+  # ★★★ LOCK3 v9 (20260804, 000000b3逐帧逆向根因修正, 未上车验证) ★★★
+  # 【根因(第十一章)】: 318状态机 门总走 0xF9(P=1,Cru=0)->0xFA执行; 我们卡 0xFB(P=1,Cru=1)死胡同->
+  #   0xF8, 永不进0xFA。铁证: 空闲期我们一直挂 Act=1 (v7.2/v8的FULL_EXIT+cooldown循环所致), Cru一抬起
+  #   EPS见"Act=1+Cru=1却没做过Prepared握手"->直接给0xFB死胡同。seg7(Act=0空闲)成功进0xFA出力2279帧、
+  #   0次0xFB; seg4(Act=1空闲)从没进0xFA、653帧全卡0xFB零出力。
+  # 【v9修法(复刻seg7成功路径)】: 非执行态(空闲/死胡同)保持 Act=0 走干净两段握手(ReqP=1->0xF9->Act=1);
+  #   遇 0xFB 死胡同立刻放 Act=0, 让EPS掉回0xF8再干净重握手, 绝不在0xFB硬挂Act=1。执行中(0xFA)遇P=1
+  #   短暂收力(对齐门总), 仅当0xFB(P=1且Cru=1)持续超此帧数才放手重握(0xF9即P=1&Cru=0健康态不放)。
+  LOCK3_DEADEND_RELEASE_FRAMES = 6   # 执行中遇0xFB(P=1+Cru=1)收力这么多帧仍不脱离 -> 放Act=0干净重握手
+                                     # (门总执行中P=1≤6帧自落回; 超6帧判死胡同, 远小于25帧锁死红线)
   # LOCK3_SOFT_COLLAPSE_RATE: SOFT收力(P=1时把Out收到0)的每帧下降速率, 【只用于SOFT收力】,
   # 正常行驶下降仍受 STEER_DELTA_DOWN=18 限制。
   # 【门总23段全量实证】: 门总遇P=1需收力时, 单帧下降能到 54~77(中位54), 2帧从64收到0;
