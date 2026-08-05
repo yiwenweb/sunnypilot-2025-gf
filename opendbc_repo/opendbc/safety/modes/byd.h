@@ -254,6 +254,13 @@ static safety_config byd_init(uint16_t param) {
     {.msg = {{BYD_ACC_EPS_STATE, 0, 8, 1U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},
     {.msg = {{BYD_PEDAL, 0, 8, 25U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},
     {.msg = {{BYD_PCM_BUTTONS, 0, 8, 10U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},
+    // 813 ACC_HUD_ADAS on Bus 2 (from MPC) - MUST be whitelisted here, otherwise
+    // safety_rx_hook() never calls byd_rx_hook() for it (only valid && whitelisted msgs
+    // reach current_hooks->rx). Without this entry the bus2 813->controls_allowed logic
+    // in byd_rx_hook is dead code -> controls_allowed stays False forever -> OP enabled
+    // vs panda controls_allowed mismatch -> controlsMismatch immediateDisable (lat+long
+    // both drop). Root cause of 000000b6. Camera sends 813 at 50Hz on bus2.
+    {.msg = {{BYD_ACC_HUD_ADAS_RX, 2, 8, 50U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},
   };
 
   static const CanMsg BYD_TX_MSGS[] = {
