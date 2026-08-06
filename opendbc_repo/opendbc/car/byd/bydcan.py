@@ -120,9 +120,6 @@ def acc_cmd(packer, CP, cam_msg: dict, mrr_leaddist, accel, rfss, sss, longActiv
             "JerkLowerLimit": jerk_lower,
             "ResumeFromStandstill": rfss,
             "StandstillState": sss,
-            # 20260804 门总实证: AccControlActive 在 AccState=3 时恒=1(100%帧),
-            # 明确告知 ESP "ACC 控制激活"。我方过去透传摄像头值(可能=0)。
-            "AccControlActive": 1,
         })
 
     data = packer.make_can_msg("ACC_CMD", CanBus.ESC, values)[1]
