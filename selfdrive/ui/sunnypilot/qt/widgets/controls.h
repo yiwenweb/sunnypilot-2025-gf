@@ -395,7 +395,12 @@ public:
     key = param.toStdString();
     int value = atoi(params.get(key).c_str());
 
-    if (value > 0 && value < button_group->buttons().size()) {
+    // Bound-check: reset stale values that would crash refresh() later.
+    if (value < 0 || value >= button_group->buttons().size()) {
+      value = 0;
+      params.put(key, "0");
+    }
+    if (value > 0) {
       button_group->button(value)->setChecked(true);
     }
 
@@ -406,7 +411,16 @@ public:
 
   void refresh() {
     int value = atoi(params.get(key).c_str());
-    button_group->button(value)->setChecked(true);
+    // Guard against stale params values pointing to a button index that no
+    // longer exists (e.g. after removing options). Without this,
+    // button_group->button(oob) returns nullptr and setChecked() SIGSEGVs.
+    if (value < 0 || value >= button_group->buttons().size()) {
+      value = 0;
+      params.put(key, "0");
+    }
+    if (auto *btn = button_group->button(value)) {
+      btn->setChecked(true);
+    }
   }
 
   void showEvent(QShowEvent *event) override {
